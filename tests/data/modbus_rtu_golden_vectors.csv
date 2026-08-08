@@ -1,0 +1,20 @@
+id,frame_hex,crc_status,expected
+G-03-REQ-01,01 03 00 00 00 02 C4 0B,valid,decode_success
+G-03-RSP-01,01 03 04 00 0A 00 14 DA 3E,valid,values_10_20
+G-04-REQ-01,01 04 00 00 00 01 31 CA,valid,decode_success
+G-04-RSP-01,01 04 02 00 0A 39 37,valid,value_10
+G-06-REQ-01,01 06 00 01 00 03 98 0B,valid,decode_success
+G-06-RSP-01,01 06 00 01 00 03 98 0B,valid,echo_matches_request
+G-03-MAX-QTY,01 03 00 00 00 7D 85 EB,valid,max_quantity_125
+G-EX-03-02,01 83 02 C0 F1,valid,remote_exception_0x02
+G-EX-04-03,01 84 03 03 01,valid,remote_exception_0x03
+G-EX-06-04,01 86 04 43 A3,valid,remote_exception_0x04
+R-QTY-ZERO,01 03 00 00 00 00 45 CA,valid,invalid_quantity
+R-ADDR-OVERFLOW,01 03 FF FF 00 02 C4 2F,valid,address_range_overflow
+R-BROADCAST,00 06 00 01 00 03 99 DA,valid,broadcast_unsupported
+R-SLAVE-248,F8 03 00 00 00 01 90 63,valid,invalid_slave_address
+R-BAD-CRC,01 03 00 00 00 02 C4 0A,invalid,crc_mismatch
+R-TRUNCATED,01 03 04 00 0A,not_applicable,frame_too_short_after_boundary
+R-BYTE-COUNT,01 03 03 00 0A 00 43 2E,valid,byte_count_mismatch
+R-NOISE-PREFIX,AA 55 01 03 00 00 00 02 C4 0B,not_applicable,resynchronize_after_noise
+R-CONCATENATED,01 03 00 00 00 02 C4 0B 01 04 00 00 00 01 31 CA,not_applicable,two_frame_events

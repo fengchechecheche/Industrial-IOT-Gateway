@@ -40,7 +40,11 @@ target_compile_features(gateway_project_options INTERFACE cxx_std_17)
 gateway_enable_warnings(gateway_project_options)
 gateway_enable_sanitizers(gateway_project_options)
 
-add_library(gateway_core STATIC src/gateway_core/build_info.cpp)
+add_library(
+  gateway_core STATIC
+  src/gateway_core/build_info.cpp
+  src/protocol/crc16_modbus.cpp
+)
 add_library(industrial_iot_gateway::gateway_core ALIAS gateway_core)
 target_include_directories(
   gateway_core
