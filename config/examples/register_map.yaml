@@ -1,0 +1,700 @@
+schema_version: "1.0.0"
+
+document:
+  project: "industrial_iot_gateway"
+  task_id: "P3-S1-T03"
+  title: "寄存器表和数据语义"
+  status: "frozen"
+  document_date: "2026-08-08"
+  target_path: "2026-07-25至2026-07-28_工作任务产物/register_map.yaml"
+  implementation_status: "not_started"
+  test_status: "not_started"
+  frozen_at: "2026-08-08"
+
+source_contracts:
+  repository_plan: "repository_plan.md"
+  protocol_subset: "protocol_subset.md"
+  architecture: "architecture.md"
+  acceptance_protocol: "acceptance_protocol.md"
+
+protocol_contract:
+  mode: "modbus_rtu"
+  role: "master"
+  address_model: "zero_based"
+  allowed_slave_id_min: 1
+  allowed_slave_id_max: 247
+  broadcast_supported: false
+  supported_read_functions:
+    - "0x03"
+    - "0x04"
+  supported_write_functions:
+    - "0x06"
+  byte_order: "big_endian"
+  default_word_order: "high_word_first"
+
+address_spaces:
+  holding_registers:
+    read_function: "0x03"
+    write_function: "0x06"
+    display_reference_base: 40001
+  input_registers:
+    read_function: "0x04"
+    write_function: null
+    display_reference_base: 30001
+
+data_type_contracts:
+  uint16:
+    register_count: 1
+    raw_min: 0
+    raw_max: 65535
+
+  int16:
+    register_count: 1
+    raw_min: -32768
+    raw_max: 32767
+
+  uint32:
+    register_count: 2
+    raw_min: 0
+    raw_max: 4294967295
+    word_order: "high_word_first"
+
+  int32:
+    register_count: 2
+    raw_min: -2147483648
+    raw_max: 2147483647
+    word_order: "high_word_first"
+
+  float32:
+    register_count: 2
+    encoding: "ieee754_binary32"
+    word_order: "high_word_first"
+
+engineering_conversion:
+  formula: "engineering_value = decoded_raw_value * scale + offset"
+  preserve_raw_value: true
+  apply_after_type_decode: true
+  automatic_byte_order_detection: false
+  automatic_word_order_detection: false
+  rounding:
+    internal_calculation: "no_implicit_rounding"
+    presentation: "consumer_defined"
+
+quality_contract:
+  states:
+    fresh:
+      description: "最近一次轮询成功，数据未超过 freshness_ms"
+    stale:
+      description: "存在历史有效值，但已超过 freshness_ms"
+    offline:
+      description: "从站达到离线判定条件；具体门限由 architecture.md 冻结"
+    invalid:
+      description: "原始值命中无效值、解码失败或违反数据合同"
+
+  on_poll_failure:
+    retain_last_raw_value: true
+    retain_last_engineering_value: true
+    mark_fresh: false
+
+  on_invalid_value:
+    retain_received_raw_value: true
+    publish_engineering_value: false
+    quality: "invalid"
+
+  timestamp_fields:
+    - "source_timestamp"
+    - "gateway_timestamp"
+
+validation_contract:
+  device_name_pattern: "^[a-z][a-z0-9_]*$"
+  register_name_pattern: "^[a-z][a-z0-9_]*$"
+
+  reject:
+    - "slave_id outside 1..247"
+    - "duplicate slave_id"
+    - "duplicate device name"
+    - "duplicate register name within one device"
+    - "unsupported function code"
+    - "unsupported data type"
+    - "register address outside 0..65535"
+    - "register span crossing address 65535"
+    - "overlapping register spans in the same slave and address space"
+    - "register_count inconsistent with data_type"
+    - "read_write access on an input register"
+    - "write_function other than 0x06"
+    - "missing write_limits on a writable register"
+    - "scale equal to zero"
+    - "freshness_ms lower than poll_period_ms"
+    - "polling enabled without poll_period_ms or freshness_ms"
+    - "invalid_raw_values outside the declared data type"
+    - "automatic byte-order or word-order detection"
+    - "missing MQTT topic or publish policy"
+    - "duplicate MQTT topic"
+    - "unknown MQTT publish policy"
+
+  overlap_key:
+    - "slave_id"
+    - "function"
+    - "address_span"
+
+  notes:
+    - "Holding registers and input registers are separate address spaces."
+    - "The same numeric address may appear once under 0x03 and once under 0x04."
+    - "display_reference is documentation only and never participates in wire encoding."
+
+mqtt_publish_contract:
+  uplink_enabled: true
+  topic_pattern: "industrial_iot_gateway/devices/{device_name}/registers/{register_name}"
+  topic_uniqueness_scope: "project"
+  required_payload_fields:
+    - "device_name"
+    - "slave_id"
+    - "register_name"
+    - "raw_value"
+    - "engineering_value"
+    - "unit"
+    - "quality"
+    - "source_timestamp"
+    - "gateway_timestamp"
+
+  publish_policies:
+    telemetry_with_quality:
+      fresh:
+        publish: true
+        value_source: "current_decoded_value"
+        engineering_value_allowed: true
+      stale:
+        publish: true
+        value_source: "last_valid_value_if_available"
+        engineering_value_allowed: true
+        required_quality: "stale"
+      offline:
+        publish: true
+        value_source: "last_valid_value_if_available"
+        engineering_value_allowed: true
+        required_quality: "offline"
+      invalid:
+        publish: true
+        value_source: "received_raw_value_if_available"
+        engineering_value_allowed: false
+        required_quality: "invalid"
+
+  rules:
+    - "stale and offline payloads must never use quality=fresh"
+    - "stale and offline payloads must identify the value as retained when a last valid value is included"
+    - "invalid payloads must omit engineering_value"
+    - "a quality transition may be published even when no engineering value is available"
+    - "register writes are not accepted from MQTT in the MVP"
+
+write_policy:
+  mqtt_downlink_enabled: false
+  silent_drop_allowed: false
+  require_explicit_source: true
+  allowed_sources:
+    - "local_test_runner"
+    - "explicit_control_api"
+  audit_fields:
+    - "request_id"
+    - "source"
+    - "slave_id"
+    - "register_name"
+    - "raw_value"
+    - "result"
+    - "timestamp"
+
+devices:
+  - slave_id: 1
+    name: "environment_sensor"
+    description: "PTY 环境传感器从站，用于温度、湿度、压力和状态测试"
+    enabled: true
+
+    registers:
+      - name: "ambient_temperature_c"
+        description: "环境温度"
+        function: "0x04"
+        address: 0
+        display_reference: "30001"
+        data_type: "int16"
+        register_count: 1
+        scale: 0.1
+        offset: 0.0
+        unit: "degC"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/environment_sensor/registers/ambient_temperature_c"
+          publish_policy: "telemetry_with_quality"
+        raw_limits:
+          min: -400
+          max: 1250
+        engineering_limits:
+          min: -40.0
+          max: 125.0
+        invalid_raw_values:
+          - -32768
+        poll:
+          enabled: true
+          poll_period_ms: 500
+          freshness_ms: 1500
+
+      - name: "relative_humidity_pct"
+        description: "相对湿度"
+        function: "0x04"
+        address: 1
+        display_reference: "30002"
+        data_type: "uint16"
+        register_count: 1
+        scale: 0.1
+        offset: 0.0
+        unit: "percent_rh"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/environment_sensor/registers/relative_humidity_pct"
+          publish_policy: "telemetry_with_quality"
+        raw_limits:
+          min: 0
+          max: 1000
+        engineering_limits:
+          min: 0.0
+          max: 100.0
+        invalid_raw_values:
+          - 65535
+        poll:
+          enabled: true
+          poll_period_ms: 500
+          freshness_ms: 1500
+
+      - name: "sensor_status"
+        description: "传感器状态位"
+        function: "0x04"
+        address: 2
+        display_reference: "30003"
+        data_type: "uint16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "bitfield"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/environment_sensor/registers/sensor_status"
+          publish_policy: "telemetry_with_quality"
+        bit_fields:
+          "0": "sensor_ready"
+          "1": "temperature_valid"
+          "2": "humidity_valid"
+          "3": "pressure_valid"
+          "4": "configuration_warning"
+          "5": "internal_fault"
+        reserved_bits:
+          - "6..15"
+        poll:
+          enabled: true
+          poll_period_ms: 1000
+          freshness_ms: 3000
+
+      - name: "air_pressure_kpa"
+        description: "空气压力，IEEE-754 float32"
+        function: "0x04"
+        address: 3
+        display_reference: "30004"
+        data_type: "float32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 1.0
+        offset: 0.0
+        unit: "kPa"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/environment_sensor/registers/air_pressure_kpa"
+          publish_policy: "telemetry_with_quality"
+        engineering_limits:
+          min: 80.0
+          max: 120.0
+        invalid_float_values:
+          - "nan"
+          - "positive_infinity"
+          - "negative_infinity"
+        poll:
+          enabled: true
+          poll_period_ms: 1000
+          freshness_ms: 3000
+
+      - name: "sample_period_ms"
+        description: "PTY 传感器内部更新周期"
+        function: "0x03"
+        write_function: "0x06"
+        address: 0
+        display_reference: "40001"
+        data_type: "uint16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "ms"
+        access: "read_write"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/environment_sensor/registers/sample_period_ms"
+          publish_policy: "telemetry_with_quality"
+        raw_limits:
+          min: 100
+          max: 60000
+        write_limits:
+          min: 100
+          max: 60000
+        write_behavior:
+          apply: "immediate"
+          echo_required: true
+        poll:
+          enabled: true
+          poll_period_ms: 5000
+          freshness_ms: 15000
+
+  - slave_id: 2
+    name: "motor_actuator"
+    description: "PTY 电机执行器从站，用于写命令、反馈和故障状态测试"
+    enabled: true
+
+    registers:
+      - name: "target_speed_rpm"
+        description: "目标转速"
+        function: "0x03"
+        write_function: "0x06"
+        address: 0
+        display_reference: "40001"
+        data_type: "uint16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "rpm"
+        access: "read_write"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/motor_actuator/registers/target_speed_rpm"
+          publish_policy: "telemetry_with_quality"
+        raw_limits:
+          min: 0
+          max: 3000
+        write_limits:
+          min: 0
+          max: 3000
+        write_behavior:
+          apply: "immediate"
+          echo_required: true
+        poll:
+          enabled: true
+          poll_period_ms: 1000
+          freshness_ms: 3000
+
+      - name: "enable_command"
+        description: "执行器使能命令"
+        function: "0x03"
+        write_function: "0x06"
+        address: 1
+        display_reference: "40002"
+        data_type: "uint16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "enum"
+        access: "read_write"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/motor_actuator/registers/enable_command"
+          publish_policy: "telemetry_with_quality"
+        enum:
+          "0": "disabled"
+          "1": "enabled"
+        raw_limits:
+          min: 0
+          max: 1
+        write_limits:
+          allowed_values:
+            - 0
+            - 1
+        write_behavior:
+          apply: "immediate"
+          echo_required: true
+        poll:
+          enabled: true
+          poll_period_ms: 1000
+          freshness_ms: 3000
+
+      - name: "actual_speed_rpm"
+        description: "实际转速，允许负值表示反向"
+        function: "0x04"
+        address: 0
+        display_reference: "30001"
+        data_type: "int16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "rpm"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/motor_actuator/registers/actual_speed_rpm"
+          publish_policy: "telemetry_with_quality"
+        raw_limits:
+          min: -3000
+          max: 3000
+        poll:
+          enabled: true
+          poll_period_ms: 200
+          freshness_ms: 600
+
+      - name: "motor_current_a"
+        description: "电机电流"
+        function: "0x04"
+        address: 1
+        display_reference: "30002"
+        data_type: "uint16"
+        register_count: 1
+        scale: 0.01
+        offset: 0.0
+        unit: "A"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/motor_actuator/registers/motor_current_a"
+          publish_policy: "telemetry_with_quality"
+        raw_limits:
+          min: 0
+          max: 2000
+        engineering_limits:
+          min: 0.0
+          max: 20.0
+        invalid_raw_values:
+          - 65535
+        poll:
+          enabled: true
+          poll_period_ms: 200
+          freshness_ms: 600
+
+      - name: "actuator_fault_flags"
+        description: "执行器故障位"
+        function: "0x04"
+        address: 2
+        display_reference: "30003"
+        data_type: "uint16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "bitfield"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/motor_actuator/registers/actuator_fault_flags"
+          publish_policy: "telemetry_with_quality"
+        bit_fields:
+          "0": "over_current"
+          "1": "over_temperature"
+          "2": "feedback_lost"
+          "3": "command_rejected"
+          "4": "internal_fault"
+        reserved_bits:
+          - "5..15"
+        poll:
+          enabled: true
+          poll_period_ms: 500
+          freshness_ms: 1500
+
+  - slave_id: 3
+    name: "fault_injection_device"
+    description: "PTY 故障注入和诊断从站，只用于软件测试"
+    enabled: true
+
+    behavior_contract:
+      normal_mode: 0
+      response_delay_uses: "response_delay_ms"
+      exception_mode_uses: "exception_code"
+      silent_mode_returns_response: false
+      bad_crc_mode_corrupts: "crc_low_byte"
+      truncated_mode_removes: "one_or_more_trailing_bytes"
+
+    registers:
+      - name: "fault_mode"
+        description: "选择下一请求的故障行为"
+        function: "0x03"
+        write_function: "0x06"
+        address: 0
+        display_reference: "40001"
+        data_type: "uint16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "enum"
+        access: "read_write"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/fault_injection_device/registers/fault_mode"
+          publish_policy: "telemetry_with_quality"
+        enum:
+          "0": "normal"
+          "1": "response_delay"
+          "2": "silent"
+          "3": "bad_crc"
+          "4": "truncated_response"
+          "5": "exception_response"
+        raw_limits:
+          min: 0
+          max: 5
+        write_limits:
+          allowed_values:
+            - 0
+            - 1
+            - 2
+            - 3
+            - 4
+            - 5
+        write_behavior:
+          apply: "next_request"
+          echo_required: true
+        poll:
+          enabled: true
+          poll_period_ms: 1000
+          freshness_ms: 3000
+
+      - name: "response_delay_ms"
+        description: "response_delay 模式下的附加响应延迟"
+        function: "0x03"
+        write_function: "0x06"
+        address: 1
+        display_reference: "40002"
+        data_type: "uint16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "ms"
+        access: "read_write"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/fault_injection_device/registers/response_delay_ms"
+          publish_policy: "telemetry_with_quality"
+        raw_limits:
+          min: 0
+          max: 5000
+        write_limits:
+          min: 0
+          max: 5000
+        write_behavior:
+          apply: "immediate"
+          echo_required: true
+        poll:
+          enabled: true
+          poll_period_ms: 1000
+          freshness_ms: 3000
+
+      - name: "exception_code"
+        description: "exception_response 模式使用的异常码"
+        function: "0x03"
+        write_function: "0x06"
+        address: 2
+        display_reference: "40003"
+        data_type: "uint16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "enum"
+        access: "read_write"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/fault_injection_device/registers/exception_code"
+          publish_policy: "telemetry_with_quality"
+        enum:
+          "1": "illegal_function"
+          "2": "illegal_data_address"
+          "3": "illegal_data_value"
+          "4": "server_device_failure"
+        raw_limits:
+          min: 1
+          max: 4
+        write_limits:
+          allowed_values:
+            - 1
+            - 2
+            - 3
+            - 4
+        write_behavior:
+          apply: "immediate"
+          echo_required: true
+        poll:
+          enabled: true
+          poll_period_ms: 1000
+          freshness_ms: 3000
+
+      - name: "request_count"
+        description: "从站启动后收到的请求总数"
+        function: "0x04"
+        address: 0
+        display_reference: "30001"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 1.0
+        offset: 0.0
+        unit: "count"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/fault_injection_device/registers/request_count"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 1000
+          freshness_ms: 3000
+
+      - name: "fault_injection_count"
+        description: "已执行的故障注入次数"
+        function: "0x04"
+        address: 2
+        display_reference: "30003"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 1.0
+        offset: 0.0
+        unit: "count"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/fault_injection_device/registers/fault_injection_count"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 1000
+          freshness_ms: 3000
+
+      - name: "uptime_seconds"
+        description: "PTY 从站运行时间"
+        function: "0x04"
+        address: 4
+        display_reference: "30005"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 1.0
+        offset: 0.0
+        unit: "s"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/fault_injection_device/registers/uptime_seconds"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 1000
+          freshness_ms: 3000
+
+acceptance:
+  unique_slave_ids: true
+  unique_register_names: true
+  address_spans_validated: true
+  address_spaces_non_overlapping: true
+  data_type_widths_validated: true
+  read_write_contracts_validated: true
+  scaling_contracts_validated: true
+  poll_and_freshness_validated: true
+  invalid_value_contracts_validated: true
+  mqtt_topics_and_quality_policy_validated: true
+  protocol_subset_consistency_validated: true
+  yaml_parse_validated: true
+  reviewer_approved: true
+
+freeze_statement:
+  frozen: true
+  frozen_at: "2026-08-08"
+  note: >
+    YAML 解析、schema 规则、地址跨度、读写权限、缩放、新鲜度、MQTT 发布合同、
+    协议一致性和人工审核已全部通过，本文件自 2026-08-08 起固化为 P3-S1-T03 基线。
+    该结论只表示寄存器表和数据语义已冻结，不表示 S2 实现或测试已经开始或通过。

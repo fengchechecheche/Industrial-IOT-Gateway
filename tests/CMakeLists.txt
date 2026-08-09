@@ -52,6 +52,41 @@ target_compile_definitions(
 )
 gateway_enable_clang_tidy(gateway_rtu_stream_parser_test)
 
+if(GATEWAY_BUILD_PTY_SLAVE)
+  add_executable(gateway_pty_slave_config_test unit/pty_slave_config_test.cpp)
+  target_link_libraries(
+    gateway_pty_slave_config_test
+    PRIVATE
+      pty_slave_support
+      GTest::gtest_main
+  )
+  target_compile_definitions(
+    gateway_pty_slave_config_test
+    PRIVATE
+      PTY_REGISTER_MAP_PATH="${CMAKE_SOURCE_DIR}/config/examples/register_map.yaml"
+      PTY_SCENARIO_CONFIG_PATH="${CMAKE_SOURCE_DIR}/config/examples/pty_slave_scenarios.yaml"
+  )
+  gateway_enable_clang_tidy(gateway_pty_slave_config_test)
+
+  add_executable(gateway_pty_slave_integration_test integration/pty_slave_integration_test.cpp)
+  target_link_libraries(
+    gateway_pty_slave_integration_test
+    PRIVATE
+      industrial_iot_gateway::gateway_core
+      gateway_project_options
+      GTest::gtest_main
+  )
+  target_compile_definitions(
+    gateway_pty_slave_integration_test
+    PRIVATE
+      PTY_SLAVE_EXECUTABLE="$<TARGET_FILE:pty_slave>"
+      PTY_REGISTER_MAP_PATH="${CMAKE_SOURCE_DIR}/config/examples/register_map.yaml"
+      PTY_SCENARIO_CONFIG_PATH="${CMAKE_SOURCE_DIR}/config/examples/pty_slave_scenarios.yaml"
+  )
+  add_dependencies(gateway_pty_slave_integration_test pty_slave)
+  gateway_enable_clang_tidy(gateway_pty_slave_integration_test)
+endif()
+
 include(GoogleTest)
 gtest_discover_tests(
   gateway_smoke_test
@@ -81,3 +116,27 @@ gtest_discover_tests(
     TIMEOUT 10
   DISCOVERY_TIMEOUT 10
 )
+
+if(GATEWAY_BUILD_PTY_SLAVE)
+  gtest_discover_tests(
+    gateway_pty_slave_config_test
+    PROPERTIES
+      LABELS unit
+      TIMEOUT 10
+    DISCOVERY_TIMEOUT 10
+  )
+  gtest_discover_tests(
+    gateway_pty_slave_integration_test
+    PROPERTIES
+      LABELS integration
+      TIMEOUT 10
+    DISCOVERY_TIMEOUT 10
+  )
+  add_test(NAME pty_integration_suite COMMAND gateway_pty_slave_integration_test)
+  set_tests_properties(
+    pty_integration_suite
+    PROPERTIES
+      LABELS pty
+      TIMEOUT 10
+  )
+endif()

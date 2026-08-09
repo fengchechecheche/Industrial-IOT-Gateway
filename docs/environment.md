@@ -17,6 +17,8 @@
 | clang-format | 18.1.3 |
 | clang-tidy | 18.1.3 |
 | GoogleTest | 1.14.0 |
+| yaml-cpp | 0.8.0 |
+| glibc `openpty` / `libutil` | 2.39 |
 
 ## 安装来源
 
@@ -30,7 +32,15 @@ apt-get install -y \
   libgtest-dev pkg-config
 ```
 
-本任务没有安装 MQTT、Modbus、PTY 辅助工具或硬件专用依赖。
+`P3-S2-T05` 新增 YAML 解析开发依赖：
+
+```bash
+apt-get update
+apt-get install -y --no-install-recommends libyaml-cpp-dev
+```
+
+PTY 链路直接使用 glibc 提供的 `<pty.h>`、`openpty()` 和 `libutil`。本任务没有安装
+`socat`，也没有安装 MQTT、外部 Modbus 协议库或硬件专用依赖。
 
 ## P3-S2-T01 验证状态
 
