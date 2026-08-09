@@ -47,6 +47,11 @@ concurrency::QueuePopResult<MeasurementMessage> MeasurementQueue::try_pop() {
   return impl_->queue.try_pop();
 }
 
+concurrency::QueuePopResult<MeasurementMessage>
+MeasurementQueue::wait_pop_until(std::chrono::steady_clock::time_point deadline) {
+  return impl_->queue.wait_pop_until(deadline);
+}
+
 void MeasurementQueue::close() { impl_->queue.close(); }
 
 concurrency::QueueStatistics MeasurementQueue::statistics() const {
@@ -81,6 +86,11 @@ concurrency::QueuePushStatus PublishQueue::push(PublishMessage message) {
 
 concurrency::QueuePopResult<PublishMessage> PublishQueue::try_pop() {
   return impl_->queue.try_pop();
+}
+
+concurrency::QueuePopResult<PublishMessage>
+PublishQueue::wait_pop_until(std::chrono::steady_clock::time_point deadline) {
+  return impl_->queue.wait_pop_until(deadline);
 }
 
 void PublishQueue::close() { impl_->queue.close(); }

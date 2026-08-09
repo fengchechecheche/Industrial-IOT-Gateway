@@ -1,0 +1,6 @@
+schema_version: "1.0.0"
+devices:
+  - slave_id: 0
+    name: "invalid_slave"
+    enabled: true
+    registers: []

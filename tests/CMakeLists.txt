@@ -120,6 +120,28 @@ target_link_libraries(
     Threads::Threads
 )
 gateway_enable_clang_tidy(gateway_shutdown_signal_integration_test)
+
+add_executable(
+  gateway_runtime_unit_test
+  unit/runtime_config_test.cpp
+  unit/pipeline_wait_test.cpp
+  unit/gateway_runtime_test.cpp
+)
+target_link_libraries(
+  gateway_runtime_unit_test
+  PRIVATE
+    industrial_iot_gateway::gateway_core
+    gateway_project_options
+    GTest::gtest_main
+    Threads::Threads
+)
+target_compile_definitions(
+  gateway_runtime_unit_test
+  PRIVATE
+    GATEWAY_REGISTER_MAP_PATH="${CMAKE_SOURCE_DIR}/config/examples/register_map.yaml"
+    GATEWAY_INVALID_REGISTER_MAP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/invalid_register_map.yaml"
+)
+gateway_enable_clang_tidy(gateway_runtime_unit_test)
 if(GATEWAY_BUILD_PTY_SLAVE)
   add_executable(gateway_pty_slave_config_test unit/pty_slave_config_test.cpp)
   target_link_libraries(
@@ -164,6 +186,56 @@ if(GATEWAY_BUILD_PTY_SLAVE)
       "${GATEWAY_UTIL_LIBRARY}"
   )
   gateway_enable_clang_tidy(gateway_serial_port_pty_test)
+
+  add_executable(
+    gateway_runtime_pty_test
+    integration/gateway_runtime_pty_test.cpp
+    support/pty_bus_harness.cpp
+  )
+  target_include_directories(gateway_runtime_pty_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/support")
+  target_link_libraries(
+    gateway_runtime_pty_test
+    PRIVATE
+      industrial_iot_gateway::gateway_core
+      gateway_project_options
+      pty_slave_support
+      GTest::gtest_main
+      Threads::Threads
+      "${GATEWAY_UTIL_LIBRARY}"
+  )
+  target_compile_definitions(
+    gateway_runtime_pty_test
+    PRIVATE
+      GATEWAY_REGISTER_MAP_PATH="${CMAKE_SOURCE_DIR}/config/examples/register_map.yaml"
+      GATEWAY_PTY_SCENARIO_PATH="${CMAKE_SOURCE_DIR}/config/examples/pty_slave_scenarios.yaml"
+  )
+  gateway_enable_clang_tidy(gateway_runtime_pty_test)
+
+  add_executable(
+    gateway_app_process_test
+    integration/gateway_app_process_test.cpp
+    support/pty_bus_harness.cpp
+  )
+  target_include_directories(gateway_app_process_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/support")
+  target_link_libraries(
+    gateway_app_process_test
+    PRIVATE
+      industrial_iot_gateway::gateway_core
+      gateway_project_options
+      pty_slave_support
+      GTest::gtest_main
+      Threads::Threads
+      "${GATEWAY_UTIL_LIBRARY}"
+  )
+  target_compile_definitions(
+    gateway_app_process_test
+    PRIVATE
+      GATEWAY_APP_EXECUTABLE="$<TARGET_FILE:gateway_app>"
+      GATEWAY_REGISTER_MAP_PATH="${CMAKE_SOURCE_DIR}/config/examples/register_map.yaml"
+      GATEWAY_PTY_SCENARIO_PATH="${CMAKE_SOURCE_DIR}/config/examples/pty_slave_scenarios.yaml"
+  )
+  add_dependencies(gateway_app_process_test gateway_app)
+  gateway_enable_clang_tidy(gateway_app_process_test)
 endif()
 
 set(
@@ -177,6 +249,7 @@ set(
   gateway_reliability_policy_test
   gateway_event_pipeline_test
   gateway_shutdown_signal_integration_test
+  gateway_runtime_unit_test
 )
 if(GATEWAY_BUILD_PTY_SLAVE)
   list(
@@ -185,6 +258,8 @@ if(GATEWAY_BUILD_PTY_SLAVE)
     gateway_pty_slave_config_test
     gateway_pty_slave_integration_test
     gateway_serial_port_pty_test
+    gateway_runtime_pty_test
+    gateway_app_process_test
   )
 endif()
 foreach(gateway_gtest_target IN LISTS gateway_gtest_targets)
@@ -260,6 +335,13 @@ gtest_discover_tests(
     TIMEOUT 10
   DISCOVERY_TIMEOUT 10
 )
+gtest_discover_tests(
+  gateway_runtime_unit_test
+  PROPERTIES
+    LABELS unit
+    TIMEOUT 10
+  DISCOVERY_TIMEOUT 10
+)
 
 
 if(GATEWAY_BUILD_PTY_SLAVE)
@@ -284,6 +366,20 @@ if(GATEWAY_BUILD_PTY_SLAVE)
       TIMEOUT 10
     DISCOVERY_TIMEOUT 10
   )
+  gtest_discover_tests(
+    gateway_runtime_pty_test
+    PROPERTIES
+      LABELS "integration;pty;runtime"
+      TIMEOUT 15
+    DISCOVERY_TIMEOUT 10
+  )
+  gtest_discover_tests(
+    gateway_app_process_test
+    PROPERTIES
+      LABELS "integration;pty;runtime;shutdown"
+      TIMEOUT 15
+    DISCOVERY_TIMEOUT 10
+  )
   add_test(NAME pty_integration_suite COMMAND gateway_pty_slave_integration_test)
   set_tests_properties(
     pty_integration_suite
@@ -297,5 +393,19 @@ if(GATEWAY_BUILD_PTY_SLAVE)
     PROPERTIES
       LABELS pty
       TIMEOUT 10
+  )
+  add_test(NAME gateway_runtime_pty_suite COMMAND gateway_runtime_pty_test)
+  set_tests_properties(
+    gateway_runtime_pty_suite
+    PROPERTIES
+      LABELS pty
+      TIMEOUT 15
+  )
+  add_test(NAME gateway_app_process_suite COMMAND gateway_app_process_test)
+  set_tests_properties(
+    gateway_app_process_suite
+    PROPERTIES
+      LABELS pty
+      TIMEOUT 15
   )
 endif()

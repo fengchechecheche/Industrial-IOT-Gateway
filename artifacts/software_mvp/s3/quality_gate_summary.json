@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "P3-S3-T05",
+  "executed_at": "2026-08-09",
+  "environment": "Ubuntu-24.04-Gateway",
+  "evidence_state": "development_pre_commit",
+  "scope": {
+    "gate": "G2_PTY_software_integration",
+    "slave_count": 3,
+    "poll_job_count": 16,
+    "mqtt": "not_run_out_of_scope",
+    "hardware_rs485": "not_run_optional"
+  },
+  "quality_gates": {
+    "debug": {"build": "PASS", "ctest": "150/150"},
+    "asan_ubsan": {"build": "PASS", "ctest": "150/150", "reports": 0},
+    "release": {"build": "PASS", "ctest": "150/150"},
+    "clang_tidy": {"build": "PASS", "ctest": "150/150", "final_warnings": 0},
+    "tsan": {"build": "PASS", "ctest": "150/150", "data_race_reports": 0},
+    "clang_format": {"files": 16, "result": "PASS"}
+  },
+  "ctest_labels": {
+    "unit": 126,
+    "integration": 20,
+    "pty": 4
+  },
+  "targeted_tests": {
+    "gateway_runtime_unit_test": "11/11",
+    "gateway_runtime_pty_test": "9/9",
+    "gateway_app_process_test": "1/1"
+  },
+  "formal_post_commit_baseline": "NOT_RUN_REQUIRES_USER_GIT_ACTION"
+}

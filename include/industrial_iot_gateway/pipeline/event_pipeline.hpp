@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <memory>
 
 #include "industrial_iot_gateway/concurrency/bounded_queue.hpp"
@@ -14,6 +15,8 @@ public:
   [[nodiscard]] bool valid() const noexcept;
   [[nodiscard]] concurrency::QueuePushStatus push(MeasurementMessage message);
   [[nodiscard]] concurrency::QueuePopResult<MeasurementMessage> try_pop();
+  [[nodiscard]] concurrency::QueuePopResult<MeasurementMessage>
+  wait_pop_until(std::chrono::steady_clock::time_point deadline);
   void close();
   [[nodiscard]] concurrency::QueueStatistics statistics() const;
 
@@ -29,6 +32,8 @@ public:
   [[nodiscard]] bool valid() const noexcept;
   [[nodiscard]] concurrency::QueuePushStatus push(PublishMessage message);
   [[nodiscard]] concurrency::QueuePopResult<PublishMessage> try_pop();
+  [[nodiscard]] concurrency::QueuePopResult<PublishMessage>
+  wait_pop_until(std::chrono::steady_clock::time_point deadline);
   void close();
   [[nodiscard]] concurrency::QueueStatistics statistics() const;
 

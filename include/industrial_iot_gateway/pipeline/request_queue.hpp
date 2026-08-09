@@ -30,6 +30,8 @@ public:
   [[nodiscard]] concurrency::QueuePushStatus push(scheduler::ScheduledRequest request);
   [[nodiscard]] concurrency::QueuePopResult<scheduler::ScheduledRequest>
   try_pop(scheduler::SchedulerTimePoint now);
+  [[nodiscard]] concurrency::QueuePopResult<scheduler::ScheduledRequest>
+  wait_pop_until(scheduler::SchedulerTimePoint deadline);
   void close();
   [[nodiscard]] bool closed() const;
   [[nodiscard]] concurrency::QueueStatistics statistics() const;

@@ -33,6 +33,8 @@ include(Sanitizers)
 include(StaticAnalysis)
 include(TsanTestRuntime)
 
+find_package(yaml-cpp 0.8 REQUIRED)
+
 if(GATEWAY_ENABLE_MQTT)
   message(FATAL_ERROR "MQTT is planned for P3-S4 and is not implemented in P3-S2-T01")
 endif()
@@ -56,6 +58,8 @@ add_library(
   src/pipeline/event_pipeline.cpp
   src/lifecycle/shutdown_coordinator.cpp
   src/observability/structured_log.cpp
+  src/config/runtime_config.cpp
+  src/runtime/gateway_runtime.cpp
 )
 add_library(industrial_iot_gateway::gateway_core ALIAS gateway_core)
 target_include_directories(
@@ -64,7 +68,7 @@ target_include_directories(
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(gateway_core PRIVATE gateway_project_options)
+target_link_libraries(gateway_core PRIVATE gateway_project_options yaml-cpp::yaml-cpp)
 gateway_enable_clang_tidy(gateway_core)
 
 add_executable(gateway_app src/app/main.cpp)
@@ -78,7 +82,6 @@ if(GATEWAY_BUILD_PTY_SLAVE)
     message(FATAL_ERROR "GATEWAY_BUILD_PTY_SLAVE requires <pty.h>")
   endif()
   find_library(GATEWAY_UTIL_LIBRARY util REQUIRED)
-  find_package(yaml-cpp 0.8 REQUIRED)
   add_subdirectory(tools/pty_slave)
 endif()
 
