@@ -128,9 +128,18 @@ public:
   }
 
   void request_stop(Clock::time_point drain_deadline) noexcept {
-    bool expected = false;
-    if (stopping_.compare_exchange_strong(expected, true)) {
-      drain_deadline_ = drain_deadline;
+    bool initiate_shutdown = false;
+    {
+      const std::lock_guard<std::mutex> lock(shutdown_mutex_);
+      if (!stopping_.load()) {
+        // Publish the deadline before the worker can observe stopping=true.
+        // finish_shutdown() takes the same mutex before reading it.
+        drain_deadline_ = drain_deadline;
+        stopping_.store(true);
+        initiate_shutdown = true;
+      }
+    }
+    if (initiate_shutdown) {
       queue_.close();
       wake_.notify_all();
     }
@@ -384,7 +393,11 @@ private:
   }
 
   void finish_shutdown() {
-    const auto deadline = drain_deadline_.value_or(Clock::now());
+    Clock::time_point deadline{};
+    {
+      const std::lock_guard<std::mutex> lock(shutdown_mutex_);
+      deadline = drain_deadline_.value_or(Clock::now());
+    }
     if (statistics().connected) {
       static_cast<void>(publish_direct(
           pipeline::PublishMessage{health("stopping", "graceful_shutdown", false)}, deadline));
@@ -464,6 +477,7 @@ private:
   std::atomic<bool> stopping_{};
   std::atomic<std::uint64_t> next_sequence_{1U};
   bool valid_{};
+  mutable std::mutex shutdown_mutex_{};
   std::optional<Clock::time_point> drain_deadline_{};
   Clock::time_point next_connect_at_{};
   std::size_t reconnect_failures_{};

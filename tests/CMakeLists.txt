@@ -1,5 +1,6 @@
 find_package(GTest CONFIG REQUIRED)
 find_package(Threads REQUIRED)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 add_executable(gateway_smoke_test unit/build_info_test.cpp)
 target_link_libraries(
@@ -144,6 +145,21 @@ target_compile_definitions(
 )
 gateway_enable_clang_tidy(gateway_runtime_unit_test)
 
+add_executable(gateway_fault_contract_test fault/fault_contract_test.cpp)
+target_link_libraries(
+  gateway_fault_contract_test
+  PRIVATE
+    industrial_iot_gateway::gateway_core
+    gateway_project_options
+    GTest::gtest_main
+    Threads::Threads
+)
+target_compile_definitions(
+  gateway_fault_contract_test
+  PRIVATE GATEWAY_REGISTER_MAP_PATH="${CMAKE_SOURCE_DIR}/config/examples/register_map.yaml"
+)
+gateway_enable_clang_tidy(gateway_fault_contract_test)
+
 add_executable(
   gateway_mqtt_policy_test
   unit/mqtt_reconnect_policy_test.cpp
@@ -223,6 +239,34 @@ if(GATEWAY_ENABLE_MQTT AND GATEWAY_BUILD_PTY_SLAVE)
       GATEWAY_PTY_SCENARIO_PATH="${CMAKE_SOURCE_DIR}/config/examples/pty_slave_scenarios.yaml"
   )
   gateway_enable_clang_tidy(gateway_mqtt_pty_runtime_integration_test)
+
+  add_executable(
+    gateway_mqtt_slow_ack_integration_test
+    integration/mqtt_slow_ack_integration_test.cpp
+    support/pty_bus_harness.cpp
+  )
+  target_include_directories(
+    gateway_mqtt_slow_ack_integration_test
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/support"
+  )
+  target_link_libraries(
+    gateway_mqtt_slow_ack_integration_test
+    PRIVATE
+      industrial_iot_gateway::gateway_mqtt
+      gateway_project_options
+      pty_slave_support
+      GTest::gtest_main
+      Threads::Threads
+      "${GATEWAY_UTIL_LIBRARY}"
+  )
+  target_compile_definitions(
+    gateway_mqtt_slow_ack_integration_test
+    PRIVATE
+      GATEWAY_MOSQUITTO_EXECUTABLE="${GATEWAY_MOSQUITTO_EXECUTABLE}"
+      GATEWAY_REGISTER_MAP_PATH="${CMAKE_SOURCE_DIR}/config/examples/register_map.yaml"
+      GATEWAY_PTY_SCENARIO_PATH="${CMAKE_SOURCE_DIR}/config/examples/pty_slave_scenarios.yaml"
+  )
+  gateway_enable_clang_tidy(gateway_mqtt_slow_ack_integration_test)
 endif()
 if(GATEWAY_BUILD_PTY_SLAVE)
   add_executable(gateway_pty_slave_config_test unit/pty_slave_config_test.cpp)
@@ -332,6 +376,7 @@ set(
   gateway_event_pipeline_test
   gateway_shutdown_signal_integration_test
   gateway_runtime_unit_test
+  gateway_fault_contract_test
   gateway_mqtt_policy_test
 )
 if(GATEWAY_BUILD_PTY_SLAVE)
@@ -354,7 +399,12 @@ if(GATEWAY_ENABLE_MQTT)
   )
 endif()
 if(GATEWAY_ENABLE_MQTT AND GATEWAY_BUILD_PTY_SLAVE)
-  list(APPEND gateway_gtest_targets gateway_mqtt_pty_runtime_integration_test)
+  list(
+    APPEND
+    gateway_gtest_targets
+    gateway_mqtt_pty_runtime_integration_test
+    gateway_mqtt_slow_ack_integration_test
+  )
 endif()
 foreach(gateway_gtest_target IN LISTS gateway_gtest_targets)
   gateway_configure_tsan_test_runtime("${gateway_gtest_target}")
@@ -438,6 +488,26 @@ gtest_discover_tests(
 )
 
 gtest_discover_tests(
+  gateway_fault_contract_test
+  PROPERTIES
+    LABELS "unit;fault"
+    TIMEOUT 10
+  DISCOVERY_TIMEOUT 10
+)
+
+add_test(
+  NAME fault_runner_unit
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/fault/test_run_fault_matrix.py"
+)
+set_tests_properties(
+  fault_runner_unit
+  PROPERTIES
+    LABELS "unit;fault"
+    TIMEOUT 15
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+
+gtest_discover_tests(
   gateway_mqtt_policy_test
   PROPERTIES
     LABELS unit
@@ -469,6 +539,13 @@ if(GATEWAY_ENABLE_MQTT AND GATEWAY_BUILD_PTY_SLAVE)
     PROPERTIES
       LABELS mqtt
       TIMEOUT 30
+    DISCOVERY_TIMEOUT 10
+  )
+  gtest_discover_tests(
+    gateway_mqtt_slow_ack_integration_test
+    PROPERTIES
+      LABELS "mqtt;integration;fault"
+      TIMEOUT 40
     DISCOVERY_TIMEOUT 10
   )
 endif()

@@ -89,6 +89,7 @@ public:
   [[nodiscard]] bool open();
   [[nodiscard]] const std::string &slave_path() const noexcept;
   [[nodiscard]] const std::string &last_error() const noexcept;
+  void set_fault_plan(FaultPlan fault) noexcept;
   [[nodiscard]] ServerRunResult run(std::size_t maximum_requests, StopRequested stop_requested);
 
 private:

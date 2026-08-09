@@ -23,6 +23,7 @@
 | Eclipse Paho MQTT C | 1.3.13-1build2 |
 | nlohmann/json | 3.11.3-1 |
 | Mosquitto / clients | 2.0.18-1build3 |
+| Python | 3.12.3（T03 runner 仅使用标准库） |
 
 ## 安装来源
 
@@ -88,6 +89,32 @@ CTest 为 168/168。`ldd` 同时确认 `gateway_app` 从系统库目录加载 Pa
 
 安装固定版本系统依赖后，另行执行了一次不使用临时依赖路径的 Debug、MQTT ON、Mosquitto
 和 PTY 干净复验：配置、全目标构建和 CTest 均通过，CTest 结果为 168/168。
+
+## P3-S4-T03 验证状态
+
+T03 引入 Python 标准库故障矩阵 runner、F01–F15 软件场景、慢 PUBACK 代理、动态 PTY
+故障切换以及请求/测量队列的 fail-fast 和满队列可观测性。固定版本系统依赖保持不变，
+未安装额外 Python 包。最终复验结果如下：
+
+| 配置 | 构建 | CTest / 场景结果 |
+|---|---|---|
+| Debug，MQTT ON + PTY + Mosquitto | PASS | PASS，176/176 |
+| ASan + UBSan，MQTT ON | PASS | PASS，176/176 |
+| Release，MQTT ON | PASS | PASS，176/176 |
+| clang-tidy 18，MQTT ON | PASS | 全目标构建完成；T03 新增诊断已清理 |
+| TSan，MQTT ON + WSL2 workaround | PASS | PASS，176/176 |
+| clang-format 18 | PASS | 全仓 `--dry-run --Werror` |
+| 软件故障矩阵 | PASS | F01–F15，15/15，未关闭失败 0 |
+
+最终故障矩阵证据位于
+`artifacts/baseline/20260809T153228Z_g3_uncommi_001/`，全部文件通过
+`sha256sum -c SHA256SUMS`。由于执行时源码尚未形成可追溯提交，该次运行在 manifest 中
+明确标记为 `exploratory=true`、`source_revision=uncommitted`；它可支持 T03 候选验收，
+但不是绑定到提交版本的正式 G3 基线。形成提交后应显式传入提交 ID 再运行一次正式基线。
+
+TSan 首轮 175/176，F11 暴露 MQTT worker 读取 `drain_deadline_` 与主线程写入之间的真实
+竞态；使用专用互斥量保护截止时间，并在设置截止时间后再发布停止标志，定向与全量复测均
+通过。
 
 以上 MQTT 验收使用回环地址上的匿名 Mosquitto，只证明本地软件链路。它不证明 TLS、生产
 认证、跨主机网络、真实 RS485 电气层或硬件台架行为。

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrial-iot-gateway.local/schemas/fault-evidence-1.0.0.json",
+  "title": "Industrial-IOT-Gateway fault evidence event",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "run_id",
+    "scenario_id",
+    "timestamp_utc",
+    "monotonic_ms",
+    "component",
+    "event_type",
+    "severity",
+    "result",
+    "queue_depths"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "event_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "scenario_id": {"pattern": "^F(0[1-9]|1[0-5])$"},
+    "timestamp_utc": {"type": "string"},
+    "monotonic_ms": {"type": "integer", "minimum": 0},
+    "component": {"type": "string", "minLength": 1},
+    "event_type": {"type": "string", "minLength": 1},
+    "severity": {"enum": ["debug", "info", "warning", "error", "critical"]},
+    "result": {"type": "string"},
+    "queue_depths": {"type": "object"},
+    "details": {"type": "object"}
+  },
+  "additionalProperties": true
+}

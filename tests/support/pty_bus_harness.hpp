@@ -23,6 +23,7 @@ public:
 
   [[nodiscard]] bool start();
   [[nodiscard]] bool disconnect_and_reconnect(std::chrono::milliseconds outage);
+  [[nodiscard]] bool set_fault(std::uint8_t slave_id, pty_slave::FaultPlan fault) noexcept;
   void stop() noexcept;
   [[nodiscard]] const std::string &gateway_path() const noexcept;
   [[nodiscard]] const std::string &last_error() const noexcept;

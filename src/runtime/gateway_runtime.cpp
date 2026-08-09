@@ -126,7 +126,8 @@ public:
        std::shared_ptr<observability::JsonlLogWriter> supplied_logger,
        std::unique_ptr<publish::PublishSink> supplied_sink)
       : config(std::move(supplied)), log_writer(std::move(supplied_logger)),
-        publish_sink(std::move(supplied_sink)), scheduler_feedback({256U, 205U}),
+        publish_sink(std::move(supplied_sink)), request_queue(config.request_queue),
+        measurement_queue(config.measurement_queue), scheduler_feedback({256U, 205U}),
         quality_control({256U, 205U}) {
     if (publish_sink == nullptr && log_writer != nullptr) {
       publish_sink = std::make_unique<publish::JsonlPublishSink>(log_writer);
@@ -157,6 +158,14 @@ public:
     }
     if (config.response_timeout.count() <= 0 || config.serial_reopen_backoff.count() <= 0) {
       error = RuntimeErrorCategory::invalid_timing;
+      return;
+    }
+    if (!request_queue.valid()) {
+      error = RuntimeErrorCategory::invalid_request_queue_configuration;
+      return;
+    }
+    if (!measurement_queue.valid()) {
+      error = RuntimeErrorCategory::invalid_measurement_queue_configuration;
       return;
     }
     scheduler::PollScheduler scheduler_probe(config.registers.poll_jobs, RuntimeClock::now(),
@@ -599,7 +608,25 @@ private:
             measurement.received_at_system = std::chrono::system_clock::now();
             measurement.registers.assign(read->values.begin(),
                                          read->values.begin() + read->value_count);
-            static_cast<void>(measurement_queue.push(std::move(measurement)));
+            const auto measurement_status = measurement_queue.push(std::move(measurement));
+            if (measurement_status != concurrency::QueuePushStatus::accepted &&
+                measurement_status != concurrency::QueuePushStatus::closed) {
+              const auto queue_statistics = measurement_queue.statistics();
+              observability::StructuredEvent event{};
+              event.event = "measurement_queue_rejected";
+              event.component = "serial";
+              event.severity = observability::LogSeverity::error;
+              event.request_id = request.request_id;
+              event.slave_id = read->slave_id;
+              event.function = static_cast<std::uint8_t>(read->function);
+              event.address = request_address(request.request);
+              event.result = "queue_full";
+              event.reason = "measurement_consumer_not_keeping_up";
+              event.queue_depth = queue_statistics.current_depth;
+              static_cast<void>(log_writer->write(event));
+              const std::lock_guard<std::mutex> lock(statistics_mutex);
+              ++statistics_value.measurement_enqueue_failures;
+            }
           } else if (const auto *write =
                          std::get_if<protocol::WriteSingleRegisterResponse>(&*outcome.response)) {
             pipeline::WriteAuditEvent audit{};

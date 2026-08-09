@@ -11,6 +11,8 @@
 #include "industrial_iot_gateway/config/runtime_config.hpp"
 #include "industrial_iot_gateway/lifecycle/shutdown_coordinator.hpp"
 #include "industrial_iot_gateway/observability/structured_log.hpp"
+#include "industrial_iot_gateway/pipeline/event_pipeline.hpp"
+#include "industrial_iot_gateway/pipeline/request_queue.hpp"
 #include "industrial_iot_gateway/publish/publish_sink.hpp"
 #include "industrial_iot_gateway/scheduler/poll_scheduler.hpp"
 #include "industrial_iot_gateway/transport/serial_port.hpp"
@@ -24,6 +26,8 @@ enum class RuntimeErrorCategory {
   invalid_scheduler_configuration,
   invalid_publish_sink,
   invalid_timing,
+  invalid_request_queue_configuration,
+  invalid_measurement_queue_configuration,
   already_started,
   thread_start_failed,
 };
@@ -32,6 +36,8 @@ struct GatewayRuntimeConfig {
   transport::SerialConfig serial{};
   config::RuntimeConfiguration registers{};
   scheduler::SchedulerPolicyConfig scheduler_policy{};
+  pipeline::RequestQueueConfig request_queue{};
+  concurrency::QueueConfig measurement_queue{512U, 410U};
   std::chrono::milliseconds response_timeout{500};
   std::chrono::milliseconds serial_reopen_backoff{200};
 };
@@ -56,6 +62,7 @@ struct GatewayRuntimeStatistics {
   std::uint64_t telemetry_events{};
   std::uint64_t quality_transitions{};
   std::uint64_t explicit_write_successes{};
+  std::uint64_t measurement_enqueue_failures{};
   std::size_t in_flight_requests{};
   std::size_t maximum_in_flight_requests{};
   bool running{};

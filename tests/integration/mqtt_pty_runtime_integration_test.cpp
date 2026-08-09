@@ -8,6 +8,7 @@
 #include <csignal>
 #include <cstdint>
 #include <fcntl.h>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -154,9 +155,15 @@ TEST(MqttPtyRuntimeIntegrationTest, SerialPollingContinuesWhileBrokerIsUnavailab
       << events.str();
 
   ASSERT_TRUE(broker.start());
-  ASSERT_TRUE(
-      wait_until([&runtime] { return runtime.statistics().publisher.connected_events >= 2U; }, 5s))
-      << events.str();
+  const auto recovery_started = std::chrono::steady_clock::now();
+  const auto reconnected =
+      wait_until([&runtime] { return runtime.statistics().publisher.connected_events >= 2U; }, 5s);
+  ASSERT_TRUE(reconnected) << events.str();
+  std::cout << "FAULT_RECOVERY_TIME_MS="
+            << std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::steady_clock::now() - recovery_started)
+                   .count()
+            << '\n';
   runtime.request_stop(ShutdownReason::service_stop);
   runtime.join();
   const auto statistics = runtime.statistics();

@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -199,7 +200,13 @@ INSTANTIATE_TEST_SUITE_P(
                               [](const auto &value) { return value.crc_errors > 0U; }},
                     FaultCase{"truncated", FaultPlan{FaultMode::truncated_response, 40U, 2U, 2U},
                               [](const auto &value) { return value.truncated_frames > 0U; }},
-                    FaultCase{"exception", FaultPlan{FaultMode::exception_response, 40U, 2U, 2U},
+                    FaultCase{"exception_01", FaultPlan{FaultMode::exception_response, 40U, 1U, 2U},
+                              [](const auto &value) { return value.remote_exceptions > 0U; }},
+                    FaultCase{"exception_02", FaultPlan{FaultMode::exception_response, 40U, 2U, 2U},
+                              [](const auto &value) { return value.remote_exceptions > 0U; }},
+                    FaultCase{"exception_03", FaultPlan{FaultMode::exception_response, 40U, 3U, 2U},
+                              [](const auto &value) { return value.remote_exceptions > 0U; }},
+                    FaultCase{"exception_04", FaultPlan{FaultMode::exception_response, 40U, 4U, 2U},
                               [](const auto &value) { return value.remote_exceptions > 0U; }}),
     [](const testing::TestParamInfo<FaultCase> &info) { return info.param.name; });
 
@@ -235,6 +242,7 @@ TEST(GatewayRuntimePtyTest, ReopensStableDevicePathAfterPtyDisconnect) {
                          std::chrono::seconds(3)));
   const auto successes_before = runtime.statistics().requests_succeeded;
   ASSERT_TRUE(bus.disconnect_and_reconnect(std::chrono::milliseconds(80))) << bus.last_error();
+  const auto recovery_started = std::chrono::steady_clock::now();
   const auto recovered = wait_until(
       [&runtime, successes_before] {
         const auto statistics = runtime.statistics();
@@ -248,6 +256,11 @@ TEST(GatewayRuntimePtyTest, ReopensStableDevicePathAfterPtyDisconnect) {
                          << " successes=" << recovery_statistics.requests_succeeded
                          << " before=" << successes_before << "\n"
                          << evidence.str();
+  std::cout << "FAULT_RECOVERY_TIME_MS="
+            << std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::steady_clock::now() - recovery_started)
+                   .count()
+            << '\n';
   runtime.request_stop(ShutdownReason::service_stop);
   runtime.join();
   EXPECT_GE(runtime.statistics().serial_open_successes, 2U);
@@ -279,15 +292,22 @@ TEST(GatewayRuntimePtyTest, EmitsStaleOfflineAndRecoversPolling) {
   const auto successes_before = runtime.statistics().requests_succeeded;
 
   ASSERT_TRUE(bus.disconnect_and_reconnect(std::chrono::milliseconds(650))) << bus.last_error();
+  const auto recovery_started = std::chrono::steady_clock::now();
   const auto recovered = wait_until(
       [&runtime, successes_before] {
         return runtime.statistics().requests_succeeded > successes_before;
       },
       std::chrono::seconds(5));
+  const auto recovery_finished = std::chrono::steady_clock::now();
   std::this_thread::sleep_for(std::chrono::milliseconds(250));
   runtime.request_stop(ShutdownReason::service_stop);
   runtime.join();
   ASSERT_TRUE(recovered) << evidence.str();
+  std::cout << "FAULT_RECOVERY_TIME_MS="
+            << std::chrono::duration_cast<std::chrono::milliseconds>(recovery_finished -
+                                                                     recovery_started)
+                   .count()
+            << '\n';
   EXPECT_TRUE(
       has_retained_telemetry(*recorded, industrial_iot_gateway::quality::RegisterQuality::stale));
   EXPECT_TRUE(

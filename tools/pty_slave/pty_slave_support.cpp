@@ -11,6 +11,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <poll.h>
 #include <pty.h>
@@ -338,19 +339,29 @@ public:
   int master_fd{-1};
   std::string slave_path{};
   std::string last_error{};
+  mutable std::mutex fault_mutex{};
 
-  [[nodiscard]] std::optional<protocol::Adu>
-  response_for_request(const protocol::Request &request) {
+  [[nodiscard]] FaultPlan fault_plan() const noexcept {
+    const std::lock_guard<std::mutex> lock(fault_mutex);
+    return configuration.fault;
+  }
+
+  void set_fault_plan(FaultPlan fault) noexcept {
+    const std::lock_guard<std::mutex> lock(fault_mutex);
+    configuration.fault = fault;
+  }
+
+  [[nodiscard]] std::optional<protocol::Adu> response_for_request(const protocol::Request &request,
+                                                                  const FaultPlan &fault) {
     if (request_slave_id(request) != configuration.registers.slave_id()) {
       return std::nullopt;
     }
 
     protocol::Response response{};
-    if (configuration.fault.mode == FaultMode::exception_response) {
+    if (fault.mode == FaultMode::exception_response) {
       response = protocol::ExceptionResponse{
-          configuration.registers.slave_id(), request_function(request),
-          configuration.fault.exception_code,
-          configuration.fault.exception_code >= 1U && configuration.fault.exception_code <= 4U};
+          configuration.registers.slave_id(), request_function(request), fault.exception_code,
+          fault.exception_code >= 1U && fault.exception_code <= 4U};
     } else if (const auto *read = std::get_if<protocol::ReadRequest>(&request)) {
       protocol::ReadResponse read_response{};
       const auto result = configuration.registers.read(read->function, read->start_address,
@@ -387,18 +398,19 @@ public:
       return std::nullopt;
     }
     auto output = *adu;
-    if (configuration.fault.mode == FaultMode::bad_crc && output.size >= 2U) {
+    if (fault.mode == FaultMode::bad_crc && output.size >= 2U) {
       output.bytes[output.size - 2U] ^= 0x01U;
     }
-    if (configuration.fault.mode == FaultMode::truncated_response) {
-      const auto remove = std::min(configuration.fault.truncate_bytes, output.size);
+    if (fault.mode == FaultMode::truncated_response) {
+      const auto remove = std::min(fault.truncate_bytes, output.size);
       output.size -= remove;
     }
     return output;
   }
 
-  [[nodiscard]] bool wait_for_delay(const StopRequested stop_requested) const noexcept {
-    auto remaining = std::chrono::milliseconds(configuration.fault.delay_ms);
+  [[nodiscard]] bool wait_for_delay(const std::uint32_t delay_ms,
+                                    const StopRequested stop_requested) const noexcept {
+    auto remaining = std::chrono::milliseconds(delay_ms);
     constexpr auto quantum = std::chrono::milliseconds(10);
     while (remaining.count() > 0 && !is_stop_requested(stop_requested)) {
       const auto current = std::min(remaining, quantum);
@@ -483,6 +495,8 @@ bool PtySlaveServer::open() {
 const std::string &PtySlaveServer::slave_path() const noexcept { return impl_->slave_path; }
 const std::string &PtySlaveServer::last_error() const noexcept { return impl_->last_error; }
 
+void PtySlaveServer::set_fault_plan(FaultPlan fault) noexcept { impl_->set_fault_plan(fault); }
+
 ServerRunResult PtySlaveServer::run(const std::size_t maximum_requests,
                                     const StopRequested stop_requested) {
   if (impl_->master_fd < 0) {
@@ -553,19 +567,21 @@ ServerRunResult PtySlaveServer::run(const std::size_t maximum_requests,
         }
 
         ++handled;
-        const auto mode = impl_->configuration.fault.mode;
+        const auto fault = impl_->fault_plan();
+        const auto mode = fault.mode;
         if (mode == FaultMode::silent) {
           std::cerr << "event=response request=" << handled << " fault=silent result=dropped\n";
           continue;
         }
-        auto response = impl_->response_for_request(request_event->request);
+        auto response = impl_->response_for_request(request_event->request, fault);
         if (!response.has_value()) {
           if (!impl_->last_error.empty()) {
             return ServerRunResult{false, handled, impl_->last_error};
           }
           continue;
         }
-        if (mode == FaultMode::delayed_response && !impl_->wait_for_delay(stop_requested)) {
+        if (mode == FaultMode::delayed_response &&
+            !impl_->wait_for_delay(fault.delay_ms, stop_requested)) {
           break;
         }
         if (!impl_->write_all(*response, stop_requested)) {

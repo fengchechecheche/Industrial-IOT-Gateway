@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0.0",
+  "profile": "software",
+  "scenarios": [
+    {
+      "scenario_id": "F01",
+      "title": "从站静默",
+      "ctest_regex": "GatewayRuntimeFaultPtyTest.ClassifiesFaultAndKeepsOtherSlavesPolling/silent",
+      "timeout_seconds": 30,
+      "expected": "timeout、有限重试、最终失败且其他从站继续轮询"
+    },
+    {
+      "scenario_id": "F02",
+      "title": "响应延迟",
+      "ctest_regex": "GatewayRuntimeFaultPtyTest.ClassifiesFaultAndKeepsOtherSlavesPolling/delayed",
+      "timeout_seconds": 30,
+      "expected": "延迟响应超时且不错误匹配下一请求"
+    },
+    {
+      "scenario_id": "F03",
+      "title": "坏 CRC",
+      "ctest_regex": "GatewayRuntimeFaultPtyTest.ClassifiesFaultAndKeepsOtherSlavesPolling/bad_crc",
+      "timeout_seconds": 30,
+      "expected": "CRC 错误被分类、坏帧丢弃并有限重试"
+    },
+    {
+      "scenario_id": "F04",
+      "title": "截断帧",
+      "ctest_regex": "GatewayRuntimeFaultPtyTest.ClassifiesFaultAndKeepsOtherSlavesPolling/truncated",
+      "timeout_seconds": 30,
+      "expected": "截断帧被分类且有限重试"
+    },
+    {
+      "scenario_id": "F05",
+      "title": "Modbus 异常响应",
+      "ctest_regex": "GatewayRuntimeFaultPtyTest.ClassifiesFaultAndKeepsOtherSlavesPolling/exception_0[1-4]",
+      "timeout_seconds": 30,
+      "expected": "0x01–0x04 均保留为合法异常响应分类，不归类为 timeout"
+    },
+    {
+      "scenario_id": "F06",
+      "title": "串口断开与恢复",
+      "ctest_regex": "GatewayRuntimePtyTest.ReopensStableDevicePathAfterPtyDisconnect",
+      "timeout_seconds": 30,
+      "requires_recovery_metric": true,
+      "expected": "I/O 错误后无忙循环并可恢复重开"
+    },
+    {
+      "scenario_id": "F07",
+      "title": "请求队列满",
+      "ctest_regex": "FaultMatrixQueueTest.F07ExplicitRequestQueueFullIsVisibleAndBounded",
+      "timeout_seconds": 15,
+      "expected": "显式请求返回 full，最大深度不超过容量"
+    },
+    {
+      "scenario_id": "F08",
+      "title": "测量队列满",
+      "ctest_regex": "FaultMatrixQueueTest.F08PausedMeasurementConsumerProducesVisibleBoundedFull",
+      "timeout_seconds": 15,
+      "expected": "暂停消费者后满队列可见且容量不越界"
+    },
+    {
+      "scenario_id": "F09",
+      "title": "发布队列满",
+      "ctest_regex": "PublishQueueTest.QualityAndWriteAuditEventsAreNeverSilentlyDropped",
+      "timeout_seconds": 15,
+      "expected": "普通遥测可合并，关键事件不被静默覆盖"
+    },
+    {
+      "scenario_id": "F10",
+      "title": "broker 断开与恢复",
+      "ctest_regex": "MqttPtyRuntimeIntegrationTest.SerialPollingContinuesWhileBrokerIsUnavailable",
+      "timeout_seconds": 40,
+      "requires_recovery_metric": true,
+      "expected": "broker 离线期间串口继续，恢复后重连"
+    },
+    {
+      "scenario_id": "F11",
+      "title": "MQTT PUBACK 延迟",
+      "ctest_regex": "FaultMatrixMqttTest.F11SlowPubackDoesNotBlockSerialPolling",
+      "timeout_seconds": 40,
+      "requires_recovery_metric": true,
+      "expected": "ACK 延迟期间轮询继续、队列有界，恢复后排空"
+    },
+    {
+      "scenario_id": "F12",
+      "title": "invalid 原始值",
+      "ctest_regex": "MqttPayloadSerializerTest.InvalidTelemetryOmitsEngineeringValue",
+      "timeout_seconds": 15,
+      "expected": "quality=invalid 且省略工程量"
+    },
+    {
+      "scenario_id": "F13",
+      "title": "stale 数据",
+      "ctest_regex": "GatewayRuntimePtyTest.EmitsStaleOfflineAndRecoversPolling",
+      "timeout_seconds": 30,
+      "requires_recovery_metric": true,
+      "expected": "过期值不得冒充 fresh，历史值标记 retained"
+    },
+    {
+      "scenario_id": "F14",
+      "title": "SIGTERM 有界关闭",
+      "ctest_regex": "GatewayAppProcessTest.SigtermStopsLiveThreeSlaveRuntimeAndPrintsSummary",
+      "timeout_seconds": 30,
+      "expected": "五秒预算内关闭且输出 summary"
+    },
+    {
+      "scenario_id": "F15",
+      "title": "错误配置 fail-fast",
+      "ctest_regex": "FaultMatrixConfigurationTest.F15RejectsInvalidRequestQueueBeforeStartingThreads",
+      "timeout_seconds": 15,
+      "expected": "非法容量在线程创建前被拒绝"
+    }
+  ]
+}

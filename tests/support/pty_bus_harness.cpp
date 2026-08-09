@@ -143,6 +143,18 @@ bool PtyBusHarness::disconnect_and_reconnect(const std::chrono::milliseconds out
   return true;
 }
 
+bool PtyBusHarness::set_fault(const std::uint8_t slave_id, pty_slave::FaultPlan fault) noexcept {
+  if (slave_id == 0U || slave_id > servers_.size()) {
+    return false;
+  }
+  auto &server = servers_[slave_id - 1U];
+  if (server == nullptr) {
+    return false;
+  }
+  server->set_fault_plan(fault);
+  return true;
+}
+
 void PtyBusHarness::stop() noexcept {
   stop_requested_.store(true);
   relay_stop_requested_.store(true);
