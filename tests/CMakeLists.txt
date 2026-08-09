@@ -24,6 +24,20 @@ target_compile_definitions(
 )
 gateway_enable_clang_tidy(gateway_crc16_test)
 
+add_executable(gateway_modbus_codec_test unit/modbus_codec_test.cpp)
+target_link_libraries(
+  gateway_modbus_codec_test
+  PRIVATE
+    industrial_iot_gateway::gateway_core
+    gateway_project_options
+    GTest::gtest_main
+)
+target_compile_definitions(
+  gateway_modbus_codec_test
+  PRIVATE GATEWAY_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+)
+gateway_enable_clang_tidy(gateway_modbus_codec_test)
+
 include(GoogleTest)
 gtest_discover_tests(
   gateway_smoke_test
@@ -34,6 +48,13 @@ gtest_discover_tests(
 )
 gtest_discover_tests(
   gateway_crc16_test
+  PROPERTIES
+    LABELS unit
+    TIMEOUT 10
+  DISCOVERY_TIMEOUT 10
+)
+gtest_discover_tests(
+  gateway_modbus_codec_test
   PROPERTIES
     LABELS unit
     TIMEOUT 10

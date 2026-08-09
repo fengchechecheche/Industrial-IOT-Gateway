@@ -44,6 +44,7 @@ add_library(
   gateway_core STATIC
   src/gateway_core/build_info.cpp
   src/protocol/crc16_modbus.cpp
+  src/protocol/modbus_codec.cpp
 )
 add_library(industrial_iot_gateway::gateway_core ALIAS gateway_core)
 target_include_directories(
