@@ -44,6 +44,8 @@ add_library(
   src/protocol/rtu_stream_parser.cpp
   src/transport/serial_port.cpp
   src/scheduler/poll_scheduler.cpp
+  src/scheduler/reliability_policy.cpp
+  src/quality/freshness_tracker.cpp
 )
 add_library(industrial_iot_gateway::gateway_core ALIAS gateway_core)
 target_include_directories(

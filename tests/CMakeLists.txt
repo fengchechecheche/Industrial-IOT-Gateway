@@ -73,6 +73,21 @@ target_link_libraries(
 )
 gateway_enable_clang_tidy(gateway_poll_scheduler_test)
 
+add_executable(
+  gateway_reliability_policy_test
+  unit/reliability_policy_test.cpp
+  unit/poll_scheduler_reliability_test.cpp
+  unit/freshness_tracker_test.cpp
+)
+target_link_libraries(
+  gateway_reliability_policy_test
+  PRIVATE
+    industrial_iot_gateway::gateway_core
+    gateway_project_options
+    GTest::gtest_main
+)
+gateway_enable_clang_tidy(gateway_reliability_policy_test)
+
 if(GATEWAY_BUILD_PTY_SLAVE)
   add_executable(gateway_pty_slave_config_test unit/pty_slave_config_test.cpp)
   target_link_libraries(
@@ -158,6 +173,14 @@ gtest_discover_tests(
 
 gtest_discover_tests(
   gateway_poll_scheduler_test
+  PROPERTIES
+    LABELS unit
+    TIMEOUT 10
+  DISCOVERY_TIMEOUT 10
+)
+
+gtest_discover_tests(
+  gateway_reliability_policy_test
   PROPERTIES
     LABELS unit
     TIMEOUT 10
