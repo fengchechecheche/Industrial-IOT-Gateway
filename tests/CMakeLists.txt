@@ -63,6 +63,16 @@ target_link_libraries(
 target_include_directories(gateway_serial_port_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
 gateway_enable_clang_tidy(gateway_serial_port_test)
 
+add_executable(gateway_poll_scheduler_test unit/poll_scheduler_test.cpp)
+target_link_libraries(
+  gateway_poll_scheduler_test
+  PRIVATE
+    industrial_iot_gateway::gateway_core
+    gateway_project_options
+    GTest::gtest_main
+)
+gateway_enable_clang_tidy(gateway_poll_scheduler_test)
+
 if(GATEWAY_BUILD_PTY_SLAVE)
   add_executable(gateway_pty_slave_config_test unit/pty_slave_config_test.cpp)
   target_link_libraries(
@@ -140,6 +150,14 @@ gtest_discover_tests(
 )
 gtest_discover_tests(
   gateway_serial_port_test
+  PROPERTIES
+    LABELS unit
+    TIMEOUT 10
+  DISCOVERY_TIMEOUT 10
+)
+
+gtest_discover_tests(
+  gateway_poll_scheduler_test
   PROPERTIES
     LABELS unit
     TIMEOUT 10
