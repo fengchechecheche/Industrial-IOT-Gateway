@@ -20,12 +20,18 @@ option(GATEWAY_ENABLE_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
 option(GATEWAY_ENABLE_CLANG_TIDY "Run clang-tidy while compiling project targets" OFF)
 option(GATEWAY_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(GATEWAY_ENABLE_TSAN "Enable ThreadSanitizer" OFF)
+option(
+  GATEWAY_ENABLE_WSL_TSAN_WORKAROUND
+  "Run TSan tests through a process-local WSL2 address-layout workaround"
+  ON
+)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(CompilerWarnings)
 include(Sanitizers)
 include(StaticAnalysis)
+include(TsanTestRuntime)
 
 if(GATEWAY_ENABLE_MQTT)
   message(FATAL_ERROR "MQTT is planned for P3-S4 and is not implemented in P3-S2-T01")
@@ -46,6 +52,10 @@ add_library(
   src/scheduler/poll_scheduler.cpp
   src/scheduler/reliability_policy.cpp
   src/quality/freshness_tracker.cpp
+  src/pipeline/request_queue.cpp
+  src/pipeline/event_pipeline.cpp
+  src/lifecycle/shutdown_coordinator.cpp
+  src/observability/structured_log.cpp
 )
 add_library(industrial_iot_gateway::gateway_core ALIAS gateway_core)
 target_include_directories(

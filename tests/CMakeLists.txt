@@ -1,4 +1,5 @@
 find_package(GTest CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 
 add_executable(gateway_smoke_test unit/build_info_test.cpp)
 target_link_libraries(
@@ -88,6 +89,37 @@ target_link_libraries(
 )
 gateway_enable_clang_tidy(gateway_reliability_policy_test)
 
+add_executable(
+  gateway_event_pipeline_test
+  unit/bounded_queue_test.cpp
+  unit/request_queue_test.cpp
+  unit/event_pipeline_test.cpp
+  unit/shutdown_coordinator_test.cpp
+  unit/structured_log_test.cpp
+)
+target_link_libraries(
+  gateway_event_pipeline_test
+  PRIVATE
+    industrial_iot_gateway::gateway_core
+    gateway_project_options
+    GTest::gtest_main
+    Threads::Threads
+)
+gateway_enable_clang_tidy(gateway_event_pipeline_test)
+
+add_executable(
+  gateway_shutdown_signal_integration_test
+  integration/shutdown_signal_integration_test.cpp
+)
+target_link_libraries(
+  gateway_shutdown_signal_integration_test
+  PRIVATE
+    industrial_iot_gateway::gateway_core
+    gateway_project_options
+    GTest::gtest_main
+    Threads::Threads
+)
+gateway_enable_clang_tidy(gateway_shutdown_signal_integration_test)
 if(GATEWAY_BUILD_PTY_SLAVE)
   add_executable(gateway_pty_slave_config_test unit/pty_slave_config_test.cpp)
   target_link_libraries(
@@ -133,6 +165,33 @@ if(GATEWAY_BUILD_PTY_SLAVE)
   )
   gateway_enable_clang_tidy(gateway_serial_port_pty_test)
 endif()
+
+set(
+  gateway_gtest_targets
+  gateway_smoke_test
+  gateway_crc16_test
+  gateway_modbus_codec_test
+  gateway_rtu_stream_parser_test
+  gateway_serial_port_test
+  gateway_poll_scheduler_test
+  gateway_reliability_policy_test
+  gateway_event_pipeline_test
+  gateway_shutdown_signal_integration_test
+)
+if(GATEWAY_BUILD_PTY_SLAVE)
+  list(
+    APPEND
+    gateway_gtest_targets
+    gateway_pty_slave_config_test
+    gateway_pty_slave_integration_test
+    gateway_serial_port_pty_test
+  )
+endif()
+foreach(gateway_gtest_target IN LISTS gateway_gtest_targets)
+  gateway_configure_tsan_test_runtime("${gateway_gtest_target}")
+endforeach()
+unset(gateway_gtest_target)
+unset(gateway_gtest_targets)
 
 include(GoogleTest)
 gtest_discover_tests(
@@ -186,6 +245,22 @@ gtest_discover_tests(
     TIMEOUT 10
   DISCOVERY_TIMEOUT 10
 )
+
+gtest_discover_tests(
+  gateway_event_pipeline_test
+  PROPERTIES
+    LABELS unit
+    TIMEOUT 10
+  DISCOVERY_TIMEOUT 10
+)
+gtest_discover_tests(
+  gateway_shutdown_signal_integration_test
+  PROPERTIES
+    LABELS "integration;shutdown"
+    TIMEOUT 10
+  DISCOVERY_TIMEOUT 10
+)
+
 
 if(GATEWAY_BUILD_PTY_SLAVE)
   gtest_discover_tests(
