@@ -68,6 +68,19 @@ TEST(BoundedQueueTest, ReplacesMatchingPendingValueWithoutGrowing) {
   EXPECT_EQ(require_value(value.value), 12);
 }
 
+TEST(BoundedQueueTest, ReservesCapacityAfterNormalInsertionLimit) {
+  BoundedQueue<int> queue({4U, 3U});
+  ASSERT_EQ(queue.try_push(10), QueuePushStatus::accepted);
+  ASSERT_EQ(queue.try_push(20), QueuePushStatus::accepted);
+  ASSERT_EQ(queue.try_push(30), QueuePushStatus::accepted);
+
+  EXPECT_EQ(queue.try_push_or_replace_with_limit(
+                40, [](int) { return false; }, 3U),
+            QueuePushStatus::full);
+  EXPECT_EQ(queue.try_push(99), QueuePushStatus::accepted);
+  EXPECT_EQ(queue.statistics().current_depth, 4U);
+}
+
 TEST(BoundedQueueTest, CloseWakesBlockedConsumerAndRejectsNewPush) {
   BoundedQueue<int> queue({2U, 1U});
   auto waiting = std::async(std::launch::async, [&queue] {

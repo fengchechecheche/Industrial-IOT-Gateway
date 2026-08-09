@@ -10,6 +10,8 @@
 #include "industrial_iot_gateway/concurrency/bounded_queue.hpp"
 #include "industrial_iot_gateway/config/runtime_config.hpp"
 #include "industrial_iot_gateway/lifecycle/shutdown_coordinator.hpp"
+#include "industrial_iot_gateway/observability/structured_log.hpp"
+#include "industrial_iot_gateway/publish/publish_sink.hpp"
 #include "industrial_iot_gateway/scheduler/poll_scheduler.hpp"
 #include "industrial_iot_gateway/transport/serial_port.hpp"
 
@@ -20,6 +22,7 @@ enum class RuntimeErrorCategory {
   invalid_serial_configuration,
   invalid_register_configuration,
   invalid_scheduler_configuration,
+  invalid_publish_sink,
   invalid_timing,
   already_started,
   thread_start_failed,
@@ -60,12 +63,15 @@ struct GatewayRuntimeStatistics {
   concurrency::QueueStatistics request_queue{};
   concurrency::QueueStatistics measurement_queue{};
   concurrency::QueueStatistics publish_queue{};
+  publish::PublishSinkStatistics publisher{};
   std::array<SlaveRuntimeStatistics, 256U> slaves{};
 };
 
 class GatewayRuntime {
 public:
   GatewayRuntime(GatewayRuntimeConfig config, std::ostream &event_output);
+  GatewayRuntime(GatewayRuntimeConfig config, std::shared_ptr<observability::JsonlLogWriter> logger,
+                 std::unique_ptr<publish::PublishSink> publish_sink);
   ~GatewayRuntime();
   GatewayRuntime(const GatewayRuntime &) = delete;
   GatewayRuntime &operator=(const GatewayRuntime &) = delete;

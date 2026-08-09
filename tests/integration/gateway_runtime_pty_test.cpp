@@ -4,8 +4,12 @@
 
 #include <chrono>
 #include <functional>
+#include <memory>
+#include <mutex>
 #include <sstream>
 #include <thread>
+#include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -18,6 +22,59 @@ using industrial_iot_gateway::pty_slave::FaultPlan;
 using industrial_iot_gateway::runtime::GatewayRuntime;
 using industrial_iot_gateway::runtime::GatewayRuntimeConfig;
 using industrial_iot_gateway::test_support::PtyBusHarness;
+
+struct RecordingState {
+  mutable std::mutex mutex{};
+  std::vector<industrial_iot_gateway::pipeline::PublishMessage> messages{};
+};
+
+class RecordingPublishSink final : public industrial_iot_gateway::publish::PublishSink {
+public:
+  explicit RecordingPublishSink(std::shared_ptr<RecordingState> state) : state_(std::move(state)) {}
+
+  [[nodiscard]] bool valid() const noexcept override { return state_ != nullptr; }
+  [[nodiscard]] bool start() override {
+    started_ = true;
+    return valid();
+  }
+  [[nodiscard]] industrial_iot_gateway::concurrency::QueuePushStatus
+  submit(industrial_iot_gateway::pipeline::PublishMessage message) override {
+    if (!started_ || stopped_) {
+      return industrial_iot_gateway::concurrency::QueuePushStatus::closed;
+    }
+    const std::lock_guard<std::mutex> lock(state_->mutex);
+    state_->messages.push_back(std::move(message));
+    ++statistics_.publish_attempts;
+    ++statistics_.publish_successes;
+    return industrial_iot_gateway::concurrency::QueuePushStatus::accepted;
+  }
+  void request_stop(std::chrono::steady_clock::time_point) noexcept override { stopped_ = true; }
+  void join() noexcept override {}
+  [[nodiscard]] industrial_iot_gateway::publish::PublishSinkStatistics statistics() const override {
+    const std::lock_guard<std::mutex> lock(state_->mutex);
+    return statistics_;
+  }
+
+private:
+  std::shared_ptr<RecordingState> state_{};
+  industrial_iot_gateway::publish::PublishSinkStatistics statistics_{};
+  bool started_{};
+  bool stopped_{};
+};
+
+[[nodiscard]] bool
+has_retained_telemetry(const RecordingState &state,
+                       industrial_iot_gateway::quality::RegisterQuality quality) {
+  const std::lock_guard<std::mutex> lock(state.mutex);
+  for (const auto &message : state.messages) {
+    const auto *telemetry = std::get_if<industrial_iot_gateway::pipeline::TelemetryEvent>(&message);
+    if (telemetry != nullptr && telemetry->quality == quality && telemetry->value_is_retained &&
+        telemetry->value.has_value() && telemetry->raw_value.has_value()) {
+      return true;
+    }
+  }
+  return false;
+}
 
 const std::string kRegisterMap = GATEWAY_REGISTER_MAP_PATH;
 const std::string kScenarioMap = GATEWAY_PTY_SCENARIO_PATH;
@@ -211,7 +268,10 @@ TEST(GatewayRuntimePtyTest, EmitsStaleOfflineAndRecoversPolling) {
   config.scheduler_policy.offline_probe_interval = std::chrono::milliseconds(500);
   config.scheduler_policy.consecutive_probe_successes_to_recover = 1U;
   std::ostringstream evidence;
-  GatewayRuntime runtime(std::move(config), evidence);
+  auto logger = std::make_shared<industrial_iot_gateway::observability::JsonlLogWriter>(evidence);
+  auto recorded = std::make_shared<RecordingState>();
+  GatewayRuntime runtime(std::move(config), logger,
+                         std::make_unique<RecordingPublishSink>(recorded));
   ASSERT_TRUE(runtime.valid());
   ASSERT_TRUE(runtime.start());
   ASSERT_TRUE(wait_until([&runtime] { return runtime.statistics().requests_succeeded >= 20U; },
@@ -227,10 +287,11 @@ TEST(GatewayRuntimePtyTest, EmitsStaleOfflineAndRecoversPolling) {
   std::this_thread::sleep_for(std::chrono::milliseconds(250));
   runtime.request_stop(ShutdownReason::service_stop);
   runtime.join();
-  const auto log = evidence.str();
-  ASSERT_TRUE(recovered) << log;
-  EXPECT_NE(log.find("\"next_state\":\"stale\""), std::string::npos);
-  EXPECT_NE(log.find("\"next_state\":\"offline\""), std::string::npos);
+  ASSERT_TRUE(recovered) << evidence.str();
+  EXPECT_TRUE(
+      has_retained_telemetry(*recorded, industrial_iot_gateway::quality::RegisterQuality::stale));
+  EXPECT_TRUE(
+      has_retained_telemetry(*recorded, industrial_iot_gateway::quality::RegisterQuality::offline));
   EXPECT_GT(runtime.statistics().requests_succeeded, successes_before);
 }
 

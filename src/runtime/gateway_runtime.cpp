@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 
@@ -16,6 +17,7 @@
 #include "industrial_iot_gateway/pipeline/request_queue.hpp"
 #include "industrial_iot_gateway/protocol/modbus_codec.hpp"
 #include "industrial_iot_gateway/protocol/rtu_stream_parser.hpp"
+#include "industrial_iot_gateway/publish/jsonl_publish_sink.hpp"
 #include "industrial_iot_gateway/quality/freshness_tracker.hpp"
 
 namespace industrial_iot_gateway::runtime {
@@ -116,29 +118,19 @@ map_parser_error(protocol::ParserErrorCategory error) noexcept {
   return "unknown";
 }
 
-[[nodiscard]] std::string quality_name(quality::RegisterQuality value) {
-  switch (value) {
-  case quality::RegisterQuality::no_valid_sample:
-    return "no_valid_sample";
-  case quality::RegisterQuality::fresh:
-    return "fresh";
-  case quality::RegisterQuality::stale:
-    return "stale";
-  case quality::RegisterQuality::invalid:
-    return "invalid";
-  case quality::RegisterQuality::offline:
-    return "offline";
-  }
-  return "unknown";
-}
-
 } // namespace
 
 class GatewayRuntime::Impl {
 public:
-  Impl(GatewayRuntimeConfig supplied, std::ostream &event_output)
-      : config(std::move(supplied)), log_writer(event_output), scheduler_feedback({256U, 205U}),
+  Impl(GatewayRuntimeConfig supplied,
+       std::shared_ptr<observability::JsonlLogWriter> supplied_logger,
+       std::unique_ptr<publish::PublishSink> supplied_sink)
+      : config(std::move(supplied)), log_writer(std::move(supplied_logger)),
+        publish_sink(std::move(supplied_sink)), scheduler_feedback({256U, 205U}),
         quality_control({256U, 205U}) {
+    if (publish_sink == nullptr && log_writer != nullptr) {
+      publish_sink = std::make_unique<publish::JsonlPublishSink>(log_writer);
+    }
     validate();
   }
 
@@ -148,6 +140,10 @@ public:
   }
 
   void validate() {
+    if (log_writer == nullptr || publish_sink == nullptr || !publish_sink->valid()) {
+      error = RuntimeErrorCategory::invalid_publish_sink;
+      return;
+    }
     if (config.serial.device_path.empty()) {
       error = RuntimeErrorCategory::invalid_serial_configuration;
       return;
@@ -186,7 +182,10 @@ public:
       statistics_value.stopped = false;
     }
     try {
-      sink_thread = std::thread([this] { sink_loop(); });
+      if (!publish_sink->start()) {
+        error = RuntimeErrorCategory::thread_start_failed;
+        return false;
+      }
       quality_thread = std::thread([this] { quality_loop(); });
       serial_thread = std::thread([this] { serial_loop(); });
       scheduler_thread = std::thread([this] { scheduler_loop(); });
@@ -242,9 +241,8 @@ public:
     if (quality_thread.joinable()) {
       quality_thread.join();
     }
-    if (sink_thread.joinable()) {
-      sink_thread.join();
-    }
+    publish_sink->request_stop(RuntimeClock::now() + std::chrono::milliseconds{2000});
+    publish_sink->join();
     if (started.load()) {
       const std::lock_guard<std::mutex> lock(statistics_mutex);
       statistics_value.running = false;
@@ -260,7 +258,8 @@ public:
     }
     copy.request_queue = request_queue.statistics();
     copy.measurement_queue = measurement_queue.statistics();
-    copy.publish_queue = publish_queue.statistics();
+    copy.publisher = publish_sink->statistics();
+    copy.publish_queue = copy.publisher.queue;
     return copy;
   }
 
@@ -283,7 +282,24 @@ private:
       value.function = request_function(request->request);
       value.address = request_address(request->request);
     }
-    static_cast<void>(log_writer.write(value));
+    static_cast<void>(log_writer->write(value));
+  }
+
+  [[nodiscard]] concurrency::QueuePushStatus publish_message(pipeline::PublishMessage message) {
+    const bool telemetry = std::holds_alternative<pipeline::TelemetryEvent>(message);
+    const bool transition = std::holds_alternative<pipeline::QualityTransitionEvent>(message);
+    const auto status = publish_sink->submit(std::move(message));
+    if (status == concurrency::QueuePushStatus::accepted ||
+        status == concurrency::QueuePushStatus::coalesced) {
+      const std::lock_guard<std::mutex> lock(statistics_mutex);
+      if (telemetry) {
+        ++statistics_value.telemetry_events;
+      }
+      if (transition) {
+        ++statistics_value.quality_transitions;
+      }
+    }
+    return status;
   }
 
   void scheduler_loop() noexcept {
@@ -580,6 +596,7 @@ private:
             measurement.function = read->function;
             measurement.start_address = request_address(request.request);
             measurement.received_at = observed_at;
+            measurement.received_at_system = std::chrono::system_clock::now();
             measurement.registers.assign(read->values.begin(),
                                          read->values.begin() + read->value_count);
             static_cast<void>(measurement_queue.push(std::move(measurement)));
@@ -591,7 +608,7 @@ private:
             audit.slave_id = write->slave_id;
             audit.address = write->register_address;
             audit.result = outcome.category;
-            static_cast<void>(publish_queue.push(audit));
+            static_cast<void>(publish_message(audit));
             const std::lock_guard<std::mutex> lock(statistics_mutex);
             ++statistics_value.explicit_write_successes;
           }
@@ -629,9 +646,54 @@ private:
     measurement_queue.close();
   }
 
-  void publish_quality_transitions(const quality::QualityUpdateBatch &batch) {
+  [[nodiscard]] const config::RuntimeRegisterDefinition *
+  find_register(std::uint32_t poll_job_id) const noexcept {
+    for (const auto &candidate : config.registers.registers) {
+      if (candidate.poll_job_id == poll_job_id) {
+        return &candidate;
+      }
+    }
+    return nullptr;
+  }
+
+  void publish_quality_snapshot(const quality::QualityTransition &transition,
+                                const std::string &reason) {
+    if (transition.current != quality::RegisterQuality::stale &&
+        transition.current != quality::RegisterQuality::offline) {
+      return;
+    }
+    const auto *definition = find_register(transition.poll_job_id);
+    if (definition == nullptr) {
+      return;
+    }
+
+    pipeline::TelemetryEvent telemetry{};
+    const auto latest = latest_valid_telemetry.find(transition.poll_job_id);
+    if (latest != latest_valid_telemetry.end()) {
+      telemetry = latest->second;
+      telemetry.value_is_retained = true;
+    } else {
+      telemetry.topic = definition->topic;
+      telemetry.device_name = definition->device_name;
+      telemetry.slave_id = definition->slave_id;
+      telemetry.register_name = definition->register_name;
+      telemetry.unit = definition->unit;
+      telemetry.source_timestamp = std::chrono::system_clock::now();
+    }
+    telemetry.event_id = next_event_id.fetch_add(1U);
+    telemetry.quality = transition.current;
+    telemetry.quality_reason = reason;
+    telemetry.run_id.clear();
+    telemetry.sequence = 0U;
+    telemetry.gateway_timestamp = std::chrono::system_clock::now();
+    static_cast<void>(publish_message(std::move(telemetry)));
+  }
+
+  void publish_quality_transitions(const quality::QualityUpdateBatch &batch,
+                                   const std::string &reason) {
     for (const auto &transition : batch.transitions) {
-      static_cast<void>(publish_queue.push(pipeline::QualityTransitionEvent{transition}));
+      static_cast<void>(publish_message(pipeline::QualityTransitionEvent{transition}));
+      publish_quality_snapshot(transition, reason);
     }
   }
 
@@ -653,27 +715,68 @@ private:
     const auto transitions =
         decoded ? freshness.record_valid_sample(definition->poll_job_id, measurement.received_at)
                 : freshness.record_invalid_sample(definition->poll_job_id, measurement.received_at);
-    publish_quality_transitions(transitions);
+    publish_quality_transitions(transitions, decoded ? "valid_sample" : "decode_error");
     pipeline::TelemetryEvent telemetry{};
     telemetry.event_id = next_event_id.fetch_add(1U);
     telemetry.request_id = measurement.request_id;
     telemetry.topic = definition->topic;
     telemetry.quality = freshness.quality(definition->poll_job_id);
-    telemetry.quality_reason = decoded ? "valid_sample" : "decode_error";
+    telemetry.quality_reason = decoded ? "valid_sample"
+                               : decoded.error == config::DecodeErrorCategory::invalid_raw_value
+                                   ? "invalid_raw_value"
+                                   : "decode_error";
     telemetry.value = decoded.value;
-    static_cast<void>(publish_queue.push(std::move(telemetry)));
+    telemetry.device_name = definition->device_name;
+    telemetry.slave_id = definition->slave_id;
+    telemetry.register_name = definition->register_name;
+    telemetry.raw_value = decoded.raw_value;
+    telemetry.unit = definition->unit;
+    telemetry.source_timestamp = measurement.received_at_system;
+    telemetry.gateway_timestamp = std::chrono::system_clock::now();
+    telemetry.freshness_deadline = measurement.received_at + definition->freshness;
+    if (decoded) {
+      latest_valid_telemetry[definition->poll_job_id] = telemetry;
+    }
+    static_cast<void>(publish_message(std::move(telemetry)));
   }
 
   void handle_quality_control(quality::FreshnessTracker &freshness,
                               const QualityControlEvent &control) {
     if (control.terminal && control.result != scheduler::RequestResultCategory::success) {
       publish_quality_transitions(
-          freshness.record_poll_failure(control.poll_job_id, control.observed_at));
+          freshness.record_poll_failure(control.poll_job_id, control.observed_at), "poll_failure");
     }
     if (control.device_state_changed) {
       const bool offline = control.device_state != scheduler::DeviceHealthState::online;
       publish_quality_transitions(
-          freshness.set_device_offline(control.slave_id, offline, control.observed_at));
+          freshness.set_device_offline(control.slave_id, offline, control.observed_at),
+          offline ? "device_offline" : "device_recovered");
+      const config::RuntimeRegisterDefinition *device = nullptr;
+      for (const auto &candidate : config.registers.registers) {
+        if (candidate.slave_id == control.slave_id) {
+          device = &candidate;
+          break;
+        }
+      }
+      if (device != nullptr) {
+        pipeline::DeviceStatusEvent status{};
+        status.event_id = next_event_id.fetch_add(1U);
+        status.device_name = device->device_name;
+        status.slave_id = control.slave_id;
+        if (control.device_state == scheduler::DeviceHealthState::online) {
+          status.state = "online";
+          status.reason = "device_recovered";
+        } else if (control.device_state == scheduler::DeviceHealthState::probing) {
+          status.state = "probing";
+          status.reason = "recovery_probe";
+        } else {
+          status.state = "offline";
+          status.reason = "consecutive_final_failures";
+        }
+        status.source_timestamp = std::chrono::system_clock::now();
+        status.gateway_timestamp = status.source_timestamp;
+        static_cast<void>(publish_message(std::move(status)));
+      }
     }
   }
 
@@ -701,52 +804,8 @@ private:
                    control.value.has_value()) {
           handle_quality_control(freshness, *control.value);
         }
-        publish_quality_transitions(freshness.advance_time(RuntimeClock::now()));
-      }
-    } catch (...) {
-      request_stop(lifecycle::ShutdownReason::fatal_component_error);
-    }
-    publish_queue.close();
-  }
-
-  void sink_loop() noexcept {
-    try {
-      while (true) {
-        auto message =
-            publish_queue.wait_pop_until(RuntimeClock::now() + std::chrono::milliseconds(50));
-        if (message.status == concurrency::QueuePopStatus::closed) {
-          break;
-        }
-        if (message.status != concurrency::QueuePopStatus::item || !message.value.has_value()) {
-          continue;
-        }
-        observability::StructuredEvent event{};
-        event.component = "evidence_sink";
-        event.severity = observability::LogSeverity::info;
-        {
-          const std::lock_guard<std::mutex> lock(statistics_mutex);
-          if (const auto *telemetry = std::get_if<pipeline::TelemetryEvent>(&*message.value)) {
-            event.event = "telemetry";
-            event.request_id = telemetry->request_id;
-            event.result = telemetry->quality_reason;
-            ++statistics_value.telemetry_events;
-          } else if (const auto *quality_transition =
-                         std::get_if<pipeline::QualityTransitionEvent>(&*message.value)) {
-            event.event = "quality_transition";
-            event.slave_id = quality_transition->transition.slave_id;
-            event.previous_state = quality_name(quality_transition->transition.previous);
-            event.next_state = quality_name(quality_transition->transition.current);
-            event.result = quality_transition->transition.value_is_retained ? "retained" : "none";
-            ++statistics_value.quality_transitions;
-          } else {
-            const auto &audit = std::get<pipeline::WriteAuditEvent>(*message.value);
-            event.event = "write_audit";
-            event.request_id = audit.request_id;
-            event.slave_id = audit.slave_id;
-            event.address = audit.address;
-          }
-        }
-        static_cast<void>(log_writer.write(event));
+        publish_quality_transitions(freshness.advance_time(RuntimeClock::now()),
+                                    "freshness_expired");
       }
     } catch (...) {
       request_stop(lifecycle::ShutdownReason::fatal_component_error);
@@ -755,10 +814,10 @@ private:
 
   GatewayRuntimeConfig config;
   RuntimeErrorCategory error{RuntimeErrorCategory::none};
-  observability::JsonlLogWriter log_writer;
+  std::shared_ptr<observability::JsonlLogWriter> log_writer;
+  std::unique_ptr<publish::PublishSink> publish_sink;
   pipeline::RequestQueue request_queue{};
   pipeline::MeasurementQueue measurement_queue{};
-  pipeline::PublishQueue publish_queue{};
   concurrency::BoundedQueue<SchedulerFeedback> scheduler_feedback;
   concurrency::BoundedQueue<QualityControlEvent> quality_control;
   lifecycle::ShutdownCoordinator shutdown{};
@@ -766,16 +825,24 @@ private:
   std::atomic<bool> stop_requested{};
   std::atomic<std::uint64_t> next_explicit_request_id{1U};
   std::atomic<std::uint64_t> next_event_id{1U};
+  std::unordered_map<std::uint32_t, pipeline::TelemetryEvent> latest_valid_telemetry{};
   std::thread scheduler_thread{};
   std::thread serial_thread{};
   std::thread quality_thread{};
-  std::thread sink_thread{};
   mutable std::mutex statistics_mutex{};
   GatewayRuntimeStatistics statistics_value{};
 };
 
 GatewayRuntime::GatewayRuntime(GatewayRuntimeConfig config, std::ostream &event_output)
-    : impl_(std::make_unique<Impl>(std::move(config), event_output)) {}
+    : impl_(std::make_unique<Impl>(std::move(config),
+                                   std::make_shared<observability::JsonlLogWriter>(event_output),
+                                   nullptr)) {}
+
+GatewayRuntime::GatewayRuntime(GatewayRuntimeConfig config,
+                               std::shared_ptr<observability::JsonlLogWriter> logger,
+                               std::unique_ptr<publish::PublishSink> supplied_sink)
+    : impl_(
+          std::make_unique<Impl>(std::move(config), std::move(logger), std::move(supplied_sink))) {}
 
 GatewayRuntime::~GatewayRuntime() = default;
 

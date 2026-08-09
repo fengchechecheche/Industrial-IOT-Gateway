@@ -1,0 +1,187 @@
+{
+  "contract_version": "1.0",
+  "protocol": "MQTT 3.1.1",
+  "cases": [
+    {
+      "case_id": "TLM_FRESH_001",
+      "description": "环境温度当前有效值",
+      "topic": "industrial_iot_gateway/devices/environment_sensor/registers/ambient_temperature_c",
+      "qos": 1,
+      "mqtt_retain": false,
+      "payload": {
+        "schema_version": "1.0",
+        "message_type": "telemetry",
+        "gateway_id": "lab_gateway_01",
+        "run_id": "8b2144dc-3701-4b80-958f-2bcf918cf307",
+        "sequence": 101,
+        "source_timestamp": "2026-08-09T10:00:00.123Z",
+        "gateway_timestamp": "2026-08-09T10:00:00.126Z",
+        "device_name": "environment_sensor",
+        "slave_id": 1,
+        "register_name": "ambient_temperature_c",
+        "raw_value": 253,
+        "engineering_value": 25.3,
+        "unit": "degC",
+        "quality": "fresh",
+        "quality_reason": "valid_sample",
+        "value_is_retained": false
+      }
+    },
+    {
+      "case_id": "TLM_STALE_001",
+      "description": "环境温度超过 freshness 后沿用最后有效值",
+      "topic": "industrial_iot_gateway/devices/environment_sensor/registers/ambient_temperature_c",
+      "qos": 1,
+      "mqtt_retain": false,
+      "payload": {
+        "schema_version": "1.0",
+        "message_type": "telemetry",
+        "gateway_id": "lab_gateway_01",
+        "run_id": "8b2144dc-3701-4b80-958f-2bcf918cf307",
+        "sequence": 102,
+        "source_timestamp": "2026-08-09T10:00:00.123Z",
+        "gateway_timestamp": "2026-08-09T10:00:02.000Z",
+        "device_name": "environment_sensor",
+        "slave_id": 1,
+        "register_name": "ambient_temperature_c",
+        "raw_value": 253,
+        "engineering_value": 25.3,
+        "unit": "degC",
+        "quality": "stale",
+        "quality_reason": "freshness_expired",
+        "value_is_retained": true
+      }
+    },
+    {
+      "case_id": "TLM_OFFLINE_001",
+      "description": "电机从站离线后沿用最后有效转速",
+      "topic": "industrial_iot_gateway/devices/motor_actuator/registers/actual_speed_rpm",
+      "qos": 1,
+      "mqtt_retain": false,
+      "payload": {
+        "schema_version": "1.0",
+        "message_type": "telemetry",
+        "gateway_id": "lab_gateway_01",
+        "run_id": "8b2144dc-3701-4b80-958f-2bcf918cf307",
+        "sequence": 103,
+        "source_timestamp": "2026-08-09T10:00:03.120Z",
+        "gateway_timestamp": "2026-08-09T10:00:10.450Z",
+        "device_name": "motor_actuator",
+        "slave_id": 2,
+        "register_name": "actual_speed_rpm",
+        "raw_value": 1200,
+        "engineering_value": 1200.0,
+        "unit": "rpm",
+        "quality": "offline",
+        "quality_reason": "device_offline",
+        "value_is_retained": true
+      }
+    },
+    {
+      "case_id": "TLM_INVALID_001",
+      "description": "电机电流命中冻结无效原始值",
+      "topic": "industrial_iot_gateway/devices/motor_actuator/registers/motor_current_a",
+      "qos": 1,
+      "mqtt_retain": false,
+      "payload": {
+        "schema_version": "1.0",
+        "message_type": "telemetry",
+        "gateway_id": "lab_gateway_01",
+        "run_id": "8b2144dc-3701-4b80-958f-2bcf918cf307",
+        "sequence": 104,
+        "source_timestamp": "2026-08-09T10:00:11.010Z",
+        "gateway_timestamp": "2026-08-09T10:00:11.012Z",
+        "device_name": "motor_actuator",
+        "slave_id": 2,
+        "register_name": "motor_current_a",
+        "raw_value": 65535,
+        "unit": "A",
+        "quality": "invalid",
+        "quality_reason": "invalid_raw_value",
+        "value_is_retained": false
+      }
+    },
+    {
+      "case_id": "TLM_OFFLINE_NO_HISTORY_001",
+      "description": "尚无有效样本时设备离线",
+      "topic": "industrial_iot_gateway/devices/environment_sensor/registers/ambient_temperature_c",
+      "qos": 1,
+      "mqtt_retain": false,
+      "payload": {
+        "schema_version": "1.0",
+        "message_type": "telemetry",
+        "gateway_id": "lab_gateway_01",
+        "run_id": "8b2144dc-3701-4b80-958f-2bcf918cf307",
+        "sequence": 105,
+        "source_timestamp": "2026-08-09T10:00:12.000Z",
+        "gateway_timestamp": "2026-08-09T10:00:12.002Z",
+        "device_name": "environment_sensor",
+        "slave_id": 1,
+        "register_name": "ambient_temperature_c",
+        "raw_value": null,
+        "unit": "degC",
+        "quality": "offline",
+        "quality_reason": "device_offline",
+        "value_is_retained": false
+      }
+    },
+    {
+      "case_id": "DEVICE_STATUS_OFFLINE_001",
+      "description": "电机从站进入离线状态",
+      "topic": "industrial_iot_gateway/devices/motor_actuator/status",
+      "qos": 1,
+      "mqtt_retain": true,
+      "payload": {
+        "schema_version": "1.0",
+        "message_type": "device_status",
+        "gateway_id": "lab_gateway_01",
+        "run_id": "8b2144dc-3701-4b80-958f-2bcf918cf307",
+        "sequence": 106,
+        "source_timestamp": "2026-08-09T10:00:10.450Z",
+        "gateway_timestamp": "2026-08-09T10:00:10.452Z",
+        "device_name": "motor_actuator",
+        "slave_id": 2,
+        "state": "offline",
+        "reason": "consecutive_final_failures"
+      }
+    },
+    {
+      "case_id": "GATEWAY_HEALTH_ONLINE_001",
+      "description": "网关连接 broker 后发布在线状态",
+      "topic": "industrial_iot_gateway/gateways/lab_gateway_01/health",
+      "qos": 1,
+      "mqtt_retain": true,
+      "payload": {
+        "schema_version": "1.0",
+        "message_type": "gateway_health",
+        "gateway_id": "lab_gateway_01",
+        "run_id": "8b2144dc-3701-4b80-958f-2bcf918cf307",
+        "sequence": 2,
+        "source_timestamp": "2026-08-09T09:59:59.500Z",
+        "gateway_timestamp": "2026-08-09T09:59:59.502Z",
+        "state": "online",
+        "reason": "started",
+        "lwt": false
+      }
+    },
+    {
+      "case_id": "GATEWAY_LWT_OFFLINE_001",
+      "description": "连接异常终止后由 broker 发布的遗嘱状态",
+      "topic": "industrial_iot_gateway/gateways/lab_gateway_01/health",
+      "qos": 1,
+      "mqtt_retain": true,
+      "payload": {
+        "schema_version": "1.0",
+        "message_type": "gateway_health",
+        "gateway_id": "lab_gateway_01",
+        "run_id": "8b2144dc-3701-4b80-958f-2bcf918cf307",
+        "sequence": 1,
+        "source_timestamp": "2026-08-09T09:59:59.100Z",
+        "gateway_timestamp": "2026-08-09T09:59:59.100Z",
+        "state": "offline",
+        "reason": "unexpected_disconnect",
+        "lwt": true
+      }
+    }
+  ]
+}

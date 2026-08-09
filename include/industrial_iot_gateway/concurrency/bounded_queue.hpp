@@ -105,6 +105,12 @@ public:
 
   [[nodiscard]] QueuePushStatus try_push_or_replace(T value,
                                                     const std::function<bool(const T &)> &matcher) {
+    return try_push_or_replace_with_limit(std::move(value), matcher, config_.capacity);
+  }
+
+  [[nodiscard]] QueuePushStatus
+  try_push_or_replace_with_limit(T value, const std::function<bool(const T &)> &matcher,
+                                 std::size_t insertion_limit) {
     std::unique_lock<std::mutex> lock(mutex_);
     if (!valid()) {
       ++statistics_.full;
@@ -119,6 +125,11 @@ public:
       *existing = std::move(value);
       ++statistics_.coalesced;
       return QueuePushStatus::coalesced;
+    }
+    if (insertion_limit == 0U || insertion_limit > config_.capacity ||
+        values_.size() >= insertion_limit) {
+      ++statistics_.full;
+      return QueuePushStatus::full;
     }
     return push_locked(std::move(value));
   }

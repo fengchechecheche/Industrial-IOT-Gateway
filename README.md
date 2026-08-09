@@ -4,17 +4,66 @@
 
 ## 当前范围
 
-仓库目前只包含 `P3-S2-T01` 的构建、测试和质量门骨架。Modbus CRC、编解码器、流式解析器、PTY 集成、MQTT、systemd 和硬件支持均尚未实现。
+仓库当前已实现：
+
+- Modbus RTU CRC16、冻结子集编解码与流式解析；
+- Linux `termios` 非阻塞串口、请求调度、超时/重试/退避、新鲜度与有界队列；
+- 三从站 PTY 软件仿真和结构化 JSONL 证据；
+- MQTT 3.1.1 QoS 1 上行、异步发布、有界缓存、按 topic 合并、重连、LWT 和指标；
+- MQTT 可通过 `GATEWAY_ENABLE_MQTT` 独立关闭，关闭时保留原有 JSONL/PTY 路径。
+
+当前不包含 MQTT 下行写寄存器、TLS/生产凭据、systemd、ARM64、真实 USB-RS485/STM32
+硬件验收或 S4 故障注入 runner。
 
 ## 构建与测试
 
 ```bash
 cmake -S . -B build/debug -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug \
-  -DGATEWAY_BUILD_TESTS=ON
+  -DGATEWAY_BUILD_TESTS=ON \
+  -DGATEWAY_BUILD_PTY_SLAVE=ON
 cmake --build build/debug
 ctest --test-dir build/debug --output-on-failure
 ```
+
+MQTT ON 依赖 Ubuntu 24.04 固定版本软件包：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends \
+  libpaho-mqttpp-dev=1.2.0-2 \
+  libpaho-mqtt-dev=1.3.13-1build2 \
+  nlohmann-json3-dev=3.11.3-1 \
+  mosquitto=2.0.18-1build3 \
+  mosquitto-clients=2.0.18-1build3
+```
+
+启用 MQTT 后构建：
+
+```bash
+cmake -S . -B build/mqtt-debug -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DGATEWAY_BUILD_TESTS=ON \
+  -DGATEWAY_BUILD_PTY_SLAVE=ON \
+  -DGATEWAY_ENABLE_MQTT=ON
+cmake --build build/mqtt-debug
+ctest --test-dir build/mqtt-debug --output-on-failure
+```
+
+本地 broker 运行示例只用于回环验收：
+
+```bash
+mosquitto -p 1883
+./build/mqtt-debug/gateway_app \
+  --serial-device /dev/pts/0 \
+  --register-map config/examples/register_map.yaml \
+  --mqtt-broker-uri tcp://127.0.0.1:1883 \
+  --mqtt-client-id iiotgwLab01 \
+  --gateway-id lab_gateway_01
+```
+
+三个 MQTT 参数必须同时提供；省略整组参数时，即使二进制启用了 MQTT，也继续使用 JSONL
+发布器。`client_id` 采用不超过 23 字符的字母数字标识，`gateway_id` 允许下划线。
 
 Sanitizer 构建：
 

@@ -59,7 +59,9 @@ concurrency::QueueStatistics MeasurementQueue::statistics() const {
 }
 
 struct PublishQueue::Impl {
-  explicit Impl(concurrency::QueueConfig config) : queue(config) {}
+  explicit Impl(concurrency::QueueConfig config)
+      : normal_insertion_limit(config.high_watermark), queue(config) {}
+  std::size_t normal_insertion_limit{};
   concurrency::BoundedQueue<PublishMessage> queue;
 };
 
@@ -76,12 +78,14 @@ concurrency::QueuePushStatus PublishQueue::push(PublishMessage message) {
     return impl_->queue.try_push(std::move(message));
   }
   const auto topic = incoming->topic;
-  return impl_->queue.try_push_or_replace(
-      std::move(message), [&topic](const PublishMessage &pending) {
+  return impl_->queue.try_push_or_replace_with_limit(
+      std::move(message),
+      [&topic](const PublishMessage &pending) {
         const auto *telemetry = std::get_if<TelemetryEvent>(&pending);
         return telemetry != nullptr && telemetry_is_coalescible(*telemetry) &&
                telemetry->topic == topic;
-      });
+      },
+      impl_->normal_insertion_limit);
 }
 
 concurrency::QueuePopResult<PublishMessage> PublishQueue::try_pop() {

@@ -94,5 +94,25 @@ TEST(PublishQueueTest, QualityAndWriteAuditEventsAreNeverSilentlyDropped) {
   EXPECT_EQ(queue.statistics().full, 1U);
 }
 
+TEST(PublishQueueTest, ReservesCapacityForCriticalEventsAtHighWatermark) {
+  PublishQueue queue({4U, 3U});
+  for (std::uint64_t id = 1U; id <= 3U; ++id) {
+    TelemetryEvent telemetry{id,
+                             id,
+                             "gateway/devices/1/registers/" + std::to_string(id),
+                             quality::RegisterQuality::fresh,
+                             "valid_sample",
+                             false,
+                             static_cast<double>(id)};
+    ASSERT_EQ(queue.push(PublishMessage{telemetry}), concurrency::QueuePushStatus::accepted);
+  }
+
+  TelemetryEvent rejected{
+      4U,    4U, "gateway/devices/1/registers/4", quality::RegisterQuality::fresh, "valid_sample",
+      false, 4.0};
+  EXPECT_EQ(queue.push(PublishMessage{rejected}), concurrency::QueuePushStatus::full);
+  EXPECT_EQ(queue.push(PublishMessage{quality_event(2U)}), concurrency::QueuePushStatus::accepted);
+}
+
 } // namespace
 } // namespace industrial_iot_gateway::pipeline

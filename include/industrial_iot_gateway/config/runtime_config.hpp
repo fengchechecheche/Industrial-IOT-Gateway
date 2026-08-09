@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -9,6 +10,7 @@
 
 #include "industrial_iot_gateway/quality/freshness_tracker.hpp"
 #include "industrial_iot_gateway/scheduler/scheduled_request.hpp"
+#include "industrial_iot_gateway/types/register_value.hpp"
 
 namespace industrial_iot_gateway::config {
 
@@ -42,6 +44,8 @@ struct RuntimeRegisterDefinition {
   double offset{};
   std::string unit{};
   std::string topic{};
+  std::chrono::milliseconds freshness{};
+  std::vector<types::RegisterValue> invalid_raw_values{};
 };
 
 struct RuntimeConfiguration {
@@ -66,11 +70,13 @@ enum class DecodeErrorCategory {
   none,
   wrong_register_count,
   non_finite_value,
+  invalid_raw_value,
 };
 
 struct DecodeResult {
   std::optional<double> value{};
   DecodeErrorCategory error{DecodeErrorCategory::none};
+  std::optional<types::RegisterValue> raw_value{};
 
   [[nodiscard]] explicit operator bool() const noexcept;
 };

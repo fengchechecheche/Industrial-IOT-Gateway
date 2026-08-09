@@ -1,5 +1,6 @@
 #include "industrial_iot_gateway/config/runtime_config.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -44,6 +45,49 @@ namespace {
 
 [[nodiscard]] std::uint16_t expected_word_count(RegisterDataType type) noexcept {
   return type == RegisterDataType::uint16 || type == RegisterDataType::int16 ? 1U : 2U;
+}
+
+[[nodiscard]] types::RegisterValue parse_raw_value(const YAML::Node &node, RegisterDataType type) {
+  switch (type) {
+  case RegisterDataType::uint16: {
+    const auto value = node.as<std::uint64_t>();
+    if (value > std::numeric_limits<std::uint16_t>::max()) {
+      throw std::runtime_error("invalid uint16 raw sentinel");
+    }
+    return value;
+  }
+  case RegisterDataType::int16: {
+    const auto value = node.as<std::int64_t>();
+    if (value < std::numeric_limits<std::int16_t>::min() ||
+        value > std::numeric_limits<std::int16_t>::max()) {
+      throw std::runtime_error("invalid int16 raw sentinel");
+    }
+    return value;
+  }
+  case RegisterDataType::uint32: {
+    const auto value = node.as<std::uint64_t>();
+    if (value > std::numeric_limits<std::uint32_t>::max()) {
+      throw std::runtime_error("invalid uint32 raw sentinel");
+    }
+    return value;
+  }
+  case RegisterDataType::int32: {
+    const auto value = node.as<std::int64_t>();
+    if (value < std::numeric_limits<std::int32_t>::min() ||
+        value > std::numeric_limits<std::int32_t>::max()) {
+      throw std::runtime_error("invalid int32 raw sentinel");
+    }
+    return value;
+  }
+  case RegisterDataType::float32: {
+    const auto value = node.as<double>();
+    if (!std::isfinite(value) || std::abs(value) > std::numeric_limits<float>::max()) {
+      throw std::runtime_error("invalid float32 raw sentinel");
+    }
+    return value;
+  }
+  }
+  throw std::runtime_error("unsupported raw sentinel type");
 }
 
 [[nodiscard]] RuntimeConfigLoadResult failure(RuntimeConfigErrorCategory error,
@@ -128,6 +172,17 @@ RuntimeConfigLoadResult load_runtime_configuration(const std::string &register_m
         definition.topic = entry["mqtt"]["topic"].as<std::string>();
         const auto period = std::chrono::milliseconds(poll["poll_period_ms"].as<std::uint32_t>());
         const auto freshness = std::chrono::milliseconds(poll["freshness_ms"].as<std::uint32_t>());
+        definition.freshness = freshness;
+        if (const auto invalid_values = entry["invalid_raw_values"]) {
+          if (!invalid_values.IsSequence()) {
+            return failure(RuntimeConfigErrorCategory::invalid_register,
+                           "invalid_raw_values must be a sequence: " + definition.register_name);
+          }
+          for (const auto &invalid_value : invalid_values) {
+            definition.invalid_raw_values.push_back(
+                parse_raw_value(invalid_value, definition.data_type));
+          }
+        }
         if (definition.register_count != expected_word_count(definition.data_type) ||
             definition.scale == 0.0 || period.count() <= 0 || freshness < period ||
             definition.topic.empty()) {
@@ -165,25 +220,25 @@ DecodeResult decode_engineering_value(const RuntimeRegisterDefinition &definitio
                                       const std::vector<std::uint16_t> &words) noexcept {
   if (words.size() != definition.register_count ||
       definition.register_count != expected_word_count(definition.data_type)) {
-    return {std::nullopt, DecodeErrorCategory::wrong_register_count};
+    return {std::nullopt, DecodeErrorCategory::wrong_register_count, std::nullopt};
   }
 
-  double raw_value{};
+  types::RegisterValue raw_value{std::uint64_t{0U}};
   switch (definition.data_type) {
   case RegisterDataType::uint16:
-    raw_value = words[0];
+    raw_value = static_cast<std::uint64_t>(words[0]);
     break;
   case RegisterDataType::int16:
-    raw_value = static_cast<std::int16_t>(words[0]);
+    raw_value = static_cast<std::int64_t>(static_cast<std::int16_t>(words[0]));
     break;
   case RegisterDataType::uint32: {
     const auto bits = (static_cast<std::uint32_t>(words[0]) << 16U) | words[1];
-    raw_value = bits;
+    raw_value = static_cast<std::uint64_t>(bits);
     break;
   }
   case RegisterDataType::int32: {
     const auto bits = (static_cast<std::uint32_t>(words[0]) << 16U) | words[1];
-    raw_value = static_cast<std::int32_t>(bits);
+    raw_value = static_cast<std::int64_t>(static_cast<std::int32_t>(bits));
     break;
   }
   case RegisterDataType::float32: {
@@ -192,17 +247,23 @@ DecodeResult decode_engineering_value(const RuntimeRegisterDefinition &definitio
     static_assert(sizeof(decoded) == sizeof(bits));
     std::memcpy(&decoded, &bits, sizeof(decoded));
     if (!std::isfinite(decoded)) {
-      return {std::nullopt, DecodeErrorCategory::non_finite_value};
+      return {std::nullopt, DecodeErrorCategory::non_finite_value, std::nullopt};
     }
-    raw_value = decoded;
+    raw_value = static_cast<double>(decoded);
     break;
   }
   }
-  const double engineering_value = raw_value * definition.scale + definition.offset;
-  if (!std::isfinite(engineering_value)) {
-    return {std::nullopt, DecodeErrorCategory::non_finite_value};
+  if (std::find(definition.invalid_raw_values.begin(), definition.invalid_raw_values.end(),
+                raw_value) != definition.invalid_raw_values.end()) {
+    return {std::nullopt, DecodeErrorCategory::invalid_raw_value, raw_value};
   }
-  return {engineering_value, DecodeErrorCategory::none};
+  const double numeric_raw =
+      std::visit([](const auto value) noexcept { return static_cast<double>(value); }, raw_value);
+  const double engineering_value = numeric_raw * definition.scale + definition.offset;
+  if (!std::isfinite(engineering_value)) {
+    return {std::nullopt, DecodeErrorCategory::non_finite_value, raw_value};
+  }
+  return {engineering_value, DecodeErrorCategory::none, raw_value};
 }
 
 } // namespace industrial_iot_gateway::config

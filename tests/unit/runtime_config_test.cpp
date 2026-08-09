@@ -96,5 +96,25 @@ TEST(RuntimeConfigTest, RejectsWrongDecodeWordCount) {
   EXPECT_EQ(decoded.error, DecodeErrorCategory::wrong_register_count);
 }
 
+TEST(RuntimeConfigTest, PreservesRawValueAndRejectsConfiguredSentinel) {
+  RuntimeRegisterDefinition definition{};
+  definition.data_type = RegisterDataType::int16;
+  definition.register_count = 1U;
+  definition.scale = 0.1;
+  definition.invalid_raw_values = {std::int64_t{-32768}};
+
+  const auto valid = decode_engineering_value(definition, {0xFF9CU});
+  ASSERT_TRUE(valid);
+  ASSERT_TRUE(valid.raw_value.has_value());
+  EXPECT_EQ(std::get<std::int64_t>(*valid.raw_value), -100);
+  EXPECT_DOUBLE_EQ(valid.value.value_or(0.0), -10.0);
+
+  const auto invalid = decode_engineering_value(definition, {0x8000U});
+  EXPECT_FALSE(invalid);
+  EXPECT_EQ(invalid.error, DecodeErrorCategory::invalid_raw_value);
+  ASSERT_TRUE(invalid.raw_value.has_value());
+  EXPECT_EQ(std::get<std::int64_t>(*invalid.raw_value), -32768);
+}
+
 } // namespace
 } // namespace industrial_iot_gateway::config

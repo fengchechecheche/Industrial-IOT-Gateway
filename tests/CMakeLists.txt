@@ -94,6 +94,7 @@ add_executable(
   unit/bounded_queue_test.cpp
   unit/request_queue_test.cpp
   unit/event_pipeline_test.cpp
+  unit/publish_sink_test.cpp
   unit/shutdown_coordinator_test.cpp
   unit/structured_log_test.cpp
 )
@@ -142,6 +143,87 @@ target_compile_definitions(
     GATEWAY_INVALID_REGISTER_MAP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/invalid_register_map.yaml"
 )
 gateway_enable_clang_tidy(gateway_runtime_unit_test)
+
+add_executable(
+  gateway_mqtt_policy_test
+  unit/mqtt_reconnect_policy_test.cpp
+  ${CMAKE_SOURCE_DIR}/src/mqtt/reconnect_policy.cpp
+)
+target_link_libraries(
+  gateway_mqtt_policy_test
+  PRIVATE
+    gateway_project_options
+    GTest::gtest_main
+)
+target_include_directories(gateway_mqtt_policy_test PRIVATE "${CMAKE_SOURCE_DIR}/include")
+gateway_enable_clang_tidy(gateway_mqtt_policy_test)
+
+if(GATEWAY_ENABLE_MQTT)
+  find_program(GATEWAY_MOSQUITTO_EXECUTABLE NAMES mosquitto REQUIRED)
+  add_executable(
+    gateway_mqtt_unit_test
+    unit/mqtt_payload_serializer_test.cpp
+    unit/mqtt_publish_sink_test.cpp
+  )
+  target_link_libraries(
+    gateway_mqtt_unit_test
+    PRIVATE
+      industrial_iot_gateway::gateway_mqtt
+      gateway_project_options
+      gateway_paho_mqtt
+      GTest::gtest_main
+      nlohmann_json::nlohmann_json
+  )
+  gateway_enable_clang_tidy(gateway_mqtt_unit_test)
+
+  add_executable(
+    gateway_mqtt_broker_integration_test
+    integration/mqtt_broker_integration_test.cpp
+  )
+  target_link_libraries(
+    gateway_mqtt_broker_integration_test
+    PRIVATE
+      industrial_iot_gateway::gateway_mqtt
+      gateway_project_options
+      gateway_paho_mqtt
+      GTest::gtest_main
+      Threads::Threads
+  )
+  target_compile_definitions(
+    gateway_mqtt_broker_integration_test
+    PRIVATE GATEWAY_MOSQUITTO_EXECUTABLE="${GATEWAY_MOSQUITTO_EXECUTABLE}"
+  )
+  gateway_enable_clang_tidy(gateway_mqtt_broker_integration_test)
+endif()
+if(GATEWAY_ENABLE_MQTT AND GATEWAY_BUILD_PTY_SLAVE)
+  add_executable(
+    gateway_mqtt_pty_runtime_integration_test
+    integration/mqtt_pty_runtime_integration_test.cpp
+    support/pty_bus_harness.cpp
+  )
+  target_include_directories(
+    gateway_mqtt_pty_runtime_integration_test
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/support"
+  )
+  target_link_libraries(
+    gateway_mqtt_pty_runtime_integration_test
+    PRIVATE
+      industrial_iot_gateway::gateway_mqtt
+      gateway_project_options
+      pty_slave_support
+      GTest::gtest_main
+      Threads::Threads
+      "${GATEWAY_UTIL_LIBRARY}"
+  )
+  target_compile_definitions(
+    gateway_mqtt_pty_runtime_integration_test
+    PRIVATE
+      GATEWAY_MOSQUITTO_EXECUTABLE="${GATEWAY_MOSQUITTO_EXECUTABLE}"
+      GATEWAY_REGISTER_MAP_PATH="${CMAKE_SOURCE_DIR}/config/examples/register_map.yaml"
+      GATEWAY_PTY_SCENARIO_PATH="${CMAKE_SOURCE_DIR}/config/examples/pty_slave_scenarios.yaml"
+  )
+  gateway_enable_clang_tidy(gateway_mqtt_pty_runtime_integration_test)
+endif()
 if(GATEWAY_BUILD_PTY_SLAVE)
   add_executable(gateway_pty_slave_config_test unit/pty_slave_config_test.cpp)
   target_link_libraries(
@@ -250,6 +332,7 @@ set(
   gateway_event_pipeline_test
   gateway_shutdown_signal_integration_test
   gateway_runtime_unit_test
+  gateway_mqtt_policy_test
 )
 if(GATEWAY_BUILD_PTY_SLAVE)
   list(
@@ -261,6 +344,17 @@ if(GATEWAY_BUILD_PTY_SLAVE)
     gateway_runtime_pty_test
     gateway_app_process_test
   )
+endif()
+if(GATEWAY_ENABLE_MQTT)
+  list(
+    APPEND
+    gateway_gtest_targets
+    gateway_mqtt_unit_test
+    gateway_mqtt_broker_integration_test
+  )
+endif()
+if(GATEWAY_ENABLE_MQTT AND GATEWAY_BUILD_PTY_SLAVE)
+  list(APPEND gateway_gtest_targets gateway_mqtt_pty_runtime_integration_test)
 endif()
 foreach(gateway_gtest_target IN LISTS gateway_gtest_targets)
   gateway_configure_tsan_test_runtime("${gateway_gtest_target}")
@@ -342,6 +436,42 @@ gtest_discover_tests(
     TIMEOUT 10
   DISCOVERY_TIMEOUT 10
 )
+
+gtest_discover_tests(
+  gateway_mqtt_policy_test
+  PROPERTIES
+    LABELS unit
+    TIMEOUT 10
+  DISCOVERY_TIMEOUT 10
+)
+add_test(NAME mqtt_policy_suite COMMAND gateway_mqtt_policy_test)
+set_tests_properties(mqtt_policy_suite PROPERTIES LABELS mqtt TIMEOUT 10)
+
+if(GATEWAY_ENABLE_MQTT)
+  gtest_discover_tests(
+    gateway_mqtt_unit_test
+    PROPERTIES
+      LABELS mqtt
+      TIMEOUT 10
+    DISCOVERY_TIMEOUT 10
+  )
+  gtest_discover_tests(
+    gateway_mqtt_broker_integration_test
+    PROPERTIES
+      LABELS mqtt
+      TIMEOUT 30
+    DISCOVERY_TIMEOUT 10
+  )
+endif()
+if(GATEWAY_ENABLE_MQTT AND GATEWAY_BUILD_PTY_SLAVE)
+  gtest_discover_tests(
+    gateway_mqtt_pty_runtime_integration_test
+    PROPERTIES
+      LABELS mqtt
+      TIMEOUT 30
+    DISCOVERY_TIMEOUT 10
+  )
+endif()
 
 
 if(GATEWAY_BUILD_PTY_SLAVE)
