@@ -106,11 +106,12 @@ T03 引入 Python 标准库故障矩阵 runner、F01–F15 软件场景、慢 PU
 | clang-format 18 | PASS | 全仓 `--dry-run --Werror` |
 | 软件故障矩阵 | PASS | F01–F15，15/15，未关闭失败 0 |
 
-最终故障矩阵证据位于
-`artifacts/baseline/20260809T153228Z_g3_uncommi_001/`，全部文件通过
-`sha256sum -c SHA256SUMS`。由于执行时源码尚未形成可追溯提交，该次运行在 manifest 中
-明确标记为 `exploratory=true`、`source_revision=uncommitted`；它可支持 T03 候选验收，
-但不是绑定到提交版本的正式 G3 基线。形成提交后应显式传入提交 ID 再运行一次正式基线。
+正式 G3 故障矩阵证据位于
+`artifacts/baseline/20260809T155317Z_g3_b293e40_001/`。该次运行在 manifest 中明确标记
+`exploratory=false`，`source_revision` 为
+`b293e402fe3b45e60de3c8f09512378c959f4bbd`。F01–F15 为 15/15 PASS，
+`unclosed_failures=0`，矩阵总耗时 7522 ms，全部文件通过
+`sha256sum -c SHA256SUMS`。因此，绑定提交版本的正式 G3 基线状态为 PASS。
 
 TSan 首轮 175/176，F11 暴露 MQTT worker 读取 `drain_deadline_` 与主线程写入之间的真实
 竞态；使用专用互斥量保护截止时间，并在设置截止时间后再发布停止标志，定向与全量复测均

@@ -9,15 +9,15 @@
 
 **T03 工程实现与验收：PASS。**
 
-已实现可重复执行的软件故障矩阵 runner，覆盖 F01–F15；最终一次探索性执行为 15/15 PASS、
-未关闭失败 0，全部证据通过 SHA256 校验。Debug、ASan/UBSan、Release、clang-tidy、TSan、
-clang-format 与完整 CTest 均通过。
+已实现可重复执行的软件故障矩阵 runner，覆盖 F01–F15；绑定本次实现提交的正式执行为
+15/15 PASS、未关闭失败 0，全部证据通过 SHA256 校验。Debug、ASan/UBSan、Release、
+clang-tidy、TSan、clang-format 与完整 CTest 均通过。
 
-**正式 G3 基线：PENDING。**
+**正式 G3 基线：PASS。**
 
-当前源码尚未形成能代表本次实现的提交，因此最终证据明确记录
-`exploratory=true`、`source_revision=uncommitted`。该结果支持 T03 工程验收，但不得表述成
-“已绑定提交的正式 G3 基线”。形成提交后需要以显式提交 ID 重新执行 runner。
+正式运行 `20260809T155317Z_g3_b293e40_001` 明确记录 `exploratory=false`，并绑定完整提交 ID
+`b293e402fe3b45e60de3c8f09512378c959f4bbd`。F01–F15 全部通过，`unclosed_failures=0`，
+正式证据目录的 `SHA256SUMS` 完整性校验通过。
 
 ## 2. 交付物
 
@@ -90,7 +90,7 @@ clang-format 与完整 CTest 均通过。
 
 最终证据：
 
-`artifacts/baseline/20260809T153228Z_g3_uncommi_001/`
+`artifacts/baseline/20260809T155317Z_g3_b293e40_001/`
 
 | ID | 场景 | 结果 | 恢复时间 |
 |---|---|---|---:|
@@ -103,14 +103,14 @@ clang-format 与完整 CTest 均通过。
 | F07 | 请求队列满 | PASS | 不适用 |
 | F08 | 测量队列满 | PASS | 不适用 |
 | F09 | 发布队列满 | PASS | 不适用 |
-| F10 | broker 断开与恢复 | PASS | 1547 ms |
+| F10 | broker 断开与恢复 | PASS | 1426 ms |
 | F11 | PUBACK 延迟 | PASS | 20 ms |
 | F12 | invalid 原始值 | PASS | 不适用 |
 | F13 | stale/offline 与恢复 | PASS | 30 ms |
 | F14 | SIGTERM 有界关闭 | PASS | 不适用 |
 | F15 | 错误配置 fail-fast | PASS | 不适用 |
 
-矩阵总耗时 7553 ms；`scenario_count=15`、`unclosed_failures=0`。恢复时间是该次运行的观察值，
+矩阵总耗时 7522 ms；`scenario_count=15`、`unclosed_failures=0`。恢复时间是该次运行的观察值，
 不是生产环境 SLA，也不是统计分布上界。
 
 ## 6. 证据结构与追踪性
@@ -169,7 +169,7 @@ clang-tidy 完成全目标构建，并未把所有 clang-tidy warning 全局提�
 | 结果文件相互追踪 | PASS | run/scenario/event ID 与 evidence IDs |
 | runner 非零表示失败 | PASS | 单元测试覆盖失败聚合 |
 | 不出现死锁或竞态 | PASS | TSan 176/176；发现并修复一处真实关闭竞态 |
-| 正式证据绑定提交 | PENDING | 当前仅有明确标记的探索性证据 |
+| 正式证据绑定提交 | PASS | `exploratory=false`；提交 `b293e402fe3b45e60de3c8f09512378c959f4bbd` |
 
 ## 9. 能力与结论边界
 
@@ -183,5 +183,6 @@ clang-tidy 完成全目标构建，并未把所有 clang-tidy warning 全局提�
 ## 10. 后续动作
 
 1. T02/T03 教程与验收报告已审核并同步为独立仓库正式维护版本；
-2. 用户自行形成能代表 T03 的提交后，以该提交 ID 重新执行非 exploratory runner；
+2. 正式 G3 已使用提交 `b293e402fe3b45e60de3c8f09512378c959f4bbd` 执行非 exploratory
+   runner，结果为 PASS；
 3. 进入 P3-S4-T04 时，仅在硬件和电气安全条件满足后执行台架，否则记录 `NOT_RUN`。
