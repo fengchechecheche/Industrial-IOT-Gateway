@@ -5,8 +5,9 @@
 - 任务：`P3-S2-T05`（PTY 从站模拟器和基础端到端通信测试）。
 - 执行日期：2026-08-09。
 - 起始基线：`b74bd2468f3769668ebd69bc5ed8a97453be8c46`。
+- 固定复验提交：`d5a69ede0cf4e71ac44b1a48b6dacf2e7a773996`。
 - WSL 开发验收：**通过**。
-- 干净提交 Release 复验：**待用户批准提交后执行**。
+- 干净提交 Release 复验：**通过**。
 
 本任务实现了可选构建的 `pty_slave` 工具。测试进程通过 `fork/exec` 启动真实模拟器
 进程，模拟器使用 `openpty()` 创建 PTY 成对链路、用 T04 请求模式 parser 接收任意
@@ -97,16 +98,40 @@ collect2: error: ld returned 1 exit status
 |---|---|---:|---|
 | Debug + 警告视为错误 | 通过 | 44/44 | 37 unit、6 integration、1 PTY 聚合门 |
 | Debug + ASan/UBSan + 警告视为错误 | 通过 | 44/44 | 无 sanitizer 报告 |
-| Release + 警告视为错误 | 通过 | 44/44 | 未提交工作区开发证据 |
+| Release + 警告视为错误 | 通过 | 44/44 | 固定提交 `d5a69ed` 上 `--clean-first` 复验通过 |
 | Debug + clang-tidy + 警告视为错误 | 通过 | 44/44 | clean-first 全量构建零告警 |
 
 44 项中有 43 个独立 GoogleTest 用例，另有一个带 `pty` 标签的聚合门，它重新运行 6 个
 真实 PTY 场景，确保 `ctest -L pty` 可独立作为准入命令。`clang-format --dry-run
 --Werror` 和 `git diff --check` 均通过。
 
+### 7.1 固定提交 Release 复验
+
+2026-08-09 在干净工作区和固定提交
+`d5a69ede0cf4e71ac44b1a48b6dacf2e7a773996` 上执行：
+
+```bash
+cmake -S . -B build/release -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DGATEWAY_BUILD_TESTS=ON \
+  -DGATEWAY_BUILD_PTY_SLAVE=ON \
+  -DGATEWAY_ENABLE_WARNINGS_AS_ERRORS=ON \
+  -DGATEWAY_ENABLE_CLANG_TIDY=OFF \
+  -DGATEWAY_ENABLE_SANITIZERS=OFF
+cmake --build build/release --clean-first --parallel 2
+ctest --test-dir build/release --output-on-failure
+ctest --test-dir build/release -L integration --output-on-failure
+ctest --test-dir build/release -L pty --output-on-failure
+```
+
+全量 CTest 为 44/44，通过；独立 `integration` 标签为 6/6，通过；独立 `pty`
+聚合门为 1/1，通过。复验完成后、固化本记录前再次执行
+`git status --porcelain=v1`，输出为空。因此 T05 的提交后固定版本 Release 复验已补齐。
+
 ## 8. 后续边界
 
-T05 已向 S3 移交可执行模拟器、三个从站的冻结配置加载能力和六类故障开关。S3 仍需实现
+T05 已完成开发验收和固定提交 Release 复验，并向 S3 移交可执行模拟器、三个从站的冻结
+配置加载能力和六类故障开关。S3 仍需实现
 生产串口 transport、单在途请求调度、多从站轮询、response timeout、最多三次尝试、
 有限退避、offline/recovery、freshness 和有界关闭。没有这些证据时，不得宣称完整 G2/G3
 已经通过；PTY 结果也不得作为真实 RS485 电气验证结果。

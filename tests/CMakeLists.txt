@@ -52,6 +52,17 @@ target_compile_definitions(
 )
 gateway_enable_clang_tidy(gateway_rtu_stream_parser_test)
 
+add_executable(gateway_serial_port_test unit/serial_port_test.cpp)
+target_link_libraries(
+  gateway_serial_port_test
+  PRIVATE
+    industrial_iot_gateway::gateway_core
+    gateway_project_options
+    GTest::gtest_main
+)
+target_include_directories(gateway_serial_port_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+gateway_enable_clang_tidy(gateway_serial_port_test)
+
 if(GATEWAY_BUILD_PTY_SLAVE)
   add_executable(gateway_pty_slave_config_test unit/pty_slave_config_test.cpp)
   target_link_libraries(
@@ -85,6 +96,17 @@ if(GATEWAY_BUILD_PTY_SLAVE)
   )
   add_dependencies(gateway_pty_slave_integration_test pty_slave)
   gateway_enable_clang_tidy(gateway_pty_slave_integration_test)
+
+  add_executable(gateway_serial_port_pty_test integration/serial_port_pty_test.cpp)
+  target_link_libraries(
+    gateway_serial_port_pty_test
+    PRIVATE
+      industrial_iot_gateway::gateway_core
+      gateway_project_options
+      GTest::gtest_main
+      "${GATEWAY_UTIL_LIBRARY}"
+  )
+  gateway_enable_clang_tidy(gateway_serial_port_pty_test)
 endif()
 
 include(GoogleTest)
@@ -116,6 +138,13 @@ gtest_discover_tests(
     TIMEOUT 10
   DISCOVERY_TIMEOUT 10
 )
+gtest_discover_tests(
+  gateway_serial_port_test
+  PROPERTIES
+    LABELS unit
+    TIMEOUT 10
+  DISCOVERY_TIMEOUT 10
+)
 
 if(GATEWAY_BUILD_PTY_SLAVE)
   gtest_discover_tests(
@@ -132,9 +161,23 @@ if(GATEWAY_BUILD_PTY_SLAVE)
       TIMEOUT 10
     DISCOVERY_TIMEOUT 10
   )
+  gtest_discover_tests(
+    gateway_serial_port_pty_test
+    PROPERTIES
+      LABELS integration
+      TIMEOUT 10
+    DISCOVERY_TIMEOUT 10
+  )
   add_test(NAME pty_integration_suite COMMAND gateway_pty_slave_integration_test)
   set_tests_properties(
     pty_integration_suite
+    PROPERTIES
+      LABELS pty
+      TIMEOUT 10
+  )
+  add_test(NAME serial_port_pty_suite COMMAND gateway_serial_port_pty_test)
+  set_tests_properties(
+    serial_port_pty_suite
     PROPERTIES
       LABELS pty
       TIMEOUT 10

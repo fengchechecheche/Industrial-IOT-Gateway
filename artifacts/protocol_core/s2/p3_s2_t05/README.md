@@ -1,11 +1,13 @@
 # P3-S2-T05 可公开证据摘要
 
 - 基线提交：`b74bd2468f3769668ebd69bc5ed8a97453be8c46`
+- 固定复验提交：`d5a69ede0cf4e71ac44b1a48b6dacf2e7a773996`
 - 环境：`Ubuntu-24.04-Gateway`，x86_64
 - 模拟器：`build/<config>/bin/pty_slave`
 - 寄存器表 SHA256：`b7410b4e1399007d7744714fdbf1f4e5ae7a51d81651057d95641c97327dc323`
 - 场景：normal、exception、delay、silent、bad-crc、truncated
 - Debug / Sanitizer / Release / clang-tidy：均为 44/44
+- 固定提交 Release `--clean-first` 复验：44/44
 - `ctest -L integration`：6/6
 - `ctest -L pty`：1/1 聚合门，内部执行 6 个真实 PTY 场景
 - ASan/UBSan：无报告
