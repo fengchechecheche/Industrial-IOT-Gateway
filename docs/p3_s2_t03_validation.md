@@ -6,7 +6,7 @@
 - 执行日期：2026-08-09。
 - 代码基线：`7c8ffbd`（`main...origin/main`）。
 - WSL 开发验收：**通过**。
-- 干净提交 Release 复验：**待用户批准提交后执行**。
+- 干净提交 Release 复验：**通过（2026-08-09，commit `6c90878dfcbd2ea2e14f916ceec8932845b8cceb`）**。
 
 本任务已实现无状态的完整 RTU ADU codec，支持三个冻结功能码的请求、正常响应和异常响应，并在功能码解码前执行长度与 CRC 门控。协议非法输入通过固定结构的 `CodecError` 返回，不通过异常、无界容器、timeout 或重试策略表达。
 
@@ -99,12 +99,12 @@ ninja: build stopped: subcommand failed.
 |---|---|---:|---|
 | Debug + 警告视为错误 | 通过 | 20/20 | WSL 开发证据 |
 | Debug + ASan/UBSan + 警告视为错误 | 通过 | 20/20 | 无 sanitizer 报告 |
-| Release + 警告视为错误 | 通过 | 20/20 | 脏工作区探索性证据 |
+| Release + 警告视为错误 | 通过 | 20/20 | 已在干净提交 `6c90878dfcbd2ea2e14f916ceec8932845b8cceb` 上 `--clean-first` 复验 |
 | Debug + clang-tidy + 警告视为错误 | 通过 | 20/20 | 全量重建零警告 |
 
 `clang-format --dry-run --Werror` 和 `git diff --check` 均通过。
 
-由于执行时工作区包含用户明确保留的 CRC 原理文档修改和 T03 未提交文件，本次 Release 结果不能替代冻结验收协议要求的干净工作区同一提交复验。
+T03 开发阶段的首次 Release 结果来自脏工作区，只作为探索性证据。用户完成第三次提交后，2026-08-09 在工作区干净、HEAD 固定为 `6c90878dfcbd2ea2e14f916ceec8932845b8cceb` 的条件下重新执行 Release `--clean-first` 全量构建和 CTest，结果 20/20 通过；命令执行前后工作区均保持干净。因此 T03 的干净提交 Release 复验已补齐。
 
 ## 8. 后续边界
 

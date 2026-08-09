@@ -45,6 +45,7 @@ add_library(
   src/gateway_core/build_info.cpp
   src/protocol/crc16_modbus.cpp
   src/protocol/modbus_codec.cpp
+  src/protocol/rtu_stream_parser.cpp
 )
 add_library(industrial_iot_gateway::gateway_core ALIAS gateway_core)
 target_include_directories(
