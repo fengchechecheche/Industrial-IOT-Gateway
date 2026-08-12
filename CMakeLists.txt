@@ -34,6 +34,7 @@ include(StaticAnalysis)
 include(TsanTestRuntime)
 
 find_package(yaml-cpp 0.8 REQUIRED)
+find_package(Threads REQUIRED)
 
 add_library(gateway_project_options INTERFACE)
 target_compile_features(gateway_project_options INTERFACE cxx_std_17)
@@ -111,6 +112,38 @@ if(GATEWAY_BUILD_PTY_SLAVE)
   endif()
   find_library(GATEWAY_UTIL_LIBRARY util REQUIRED)
   add_subdirectory(tools/pty_slave)
+
+  add_library(gateway_simulation STATIC tools/simulation/pty_bus_harness.cpp)
+  add_library(industrial_iot_gateway::gateway_simulation ALIAS gateway_simulation)
+  target_include_directories(
+    gateway_simulation
+    PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/pty_slave
+  )
+  target_link_libraries(
+    gateway_simulation
+    PUBLIC pty_slave_support Threads::Threads
+    PRIVATE gateway_project_options "${GATEWAY_UTIL_LIBRARY}"
+  )
+  gateway_enable_clang_tidy(gateway_simulation)
+
+  if(GATEWAY_ENABLE_MQTT)
+    add_executable(gateway_soak_driver tools/soak/gateway_soak_driver.cpp)
+    target_link_libraries(
+      gateway_soak_driver
+      PRIVATE
+        industrial_iot_gateway::gateway_core
+        industrial_iot_gateway::gateway_mqtt
+        industrial_iot_gateway::gateway_simulation
+        gateway_project_options
+        nlohmann_json::nlohmann_json
+        Threads::Threads
+    )
+    gateway_enable_clang_tidy(gateway_soak_driver)
+    gateway_configure_tsan_test_runtime(gateway_soak_driver)
+  endif()
 endif()
 
 if(GATEWAY_BUILD_TESTS)

@@ -1,4 +1,4 @@
-#include "pty_bus_harness.hpp"
+#include "industrial_iot_gateway/simulation/pty_bus_harness.hpp"
 
 #include <algorithm>
 #include <array>
@@ -14,7 +14,7 @@
 #include <unistd.h>
 #include <utility>
 
-namespace industrial_iot_gateway::test_support {
+namespace industrial_iot_gateway::simulation {
 namespace {
 
 constexpr protocol::ParserTiming kParserTiming{860U, 2'006U};
@@ -97,7 +97,7 @@ bool PtyBusHarness::start() {
     }
     loaded.configuration->fault = faults_[index];
     servers_[index] = std::make_unique<pty_slave::PtySlaveServer>(std::move(*loaded.configuration),
-                                                                  kParserTiming);
+                                                                  kParserTiming, false);
     if (!servers_[index]->open()) {
       last_error_ = servers_[index]->last_error();
       stop();
@@ -308,4 +308,4 @@ void PtyBusHarness::close_descriptors() noexcept {
   }
 }
 
-} // namespace industrial_iot_gateway::test_support
+} // namespace industrial_iot_gateway::simulation

@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "extends": "../../../config/soak/software_release.json",
+  "profile_id": "software_smoke_v1",
+  "profile_kind": "smoke",
+  "duration_seconds": 90,
+  "warmup_seconds": 5,
+  "fault_cycle_seconds": 90,
+  "fault_cycle_count": 1,
+  "faults": [
+    {"fault_id": "silent", "kind": "silent", "actor": "driver", "target_slave": 3, "offset_seconds": 6, "duration_seconds": 2, "recovery_timeout_seconds": 6, "expected_category": "response_timeout"},
+    {"fault_id": "delayed", "kind": "delayed_response", "actor": "driver", "target_slave": 3, "offset_seconds": 16, "duration_seconds": 2, "recovery_timeout_seconds": 10, "delay_ms": 650, "expected_category": "response_timeout"},
+    {"fault_id": "bad_crc", "kind": "bad_crc", "actor": "driver", "target_slave": 3, "offset_seconds": 30, "duration_seconds": 2, "recovery_timeout_seconds": 10, "expected_category": "crc_mismatch"},
+    {"fault_id": "truncated", "kind": "truncated_response", "actor": "driver", "target_slave": 3, "offset_seconds": 44, "duration_seconds": 2, "recovery_timeout_seconds": 10, "truncate_bytes": 2, "expected_category": "truncated_frame"},
+    {"fault_id": "exception_02", "kind": "exception_response", "actor": "driver", "target_slave": 3, "offset_seconds": 58, "duration_seconds": 2, "recovery_timeout_seconds": 6, "exception_code": 2, "expected_category": "remote_exception"},
+    {"fault_id": "broker_stop", "kind": "broker_stop", "actor": "runner", "offset_seconds": 68, "duration_seconds": 4, "recovery_timeout_seconds": 8, "expected_category": "mqtt_disconnected"},
+    {"fault_id": "pty_disconnect", "kind": "pty_disconnect", "actor": "driver", "offset_seconds": 82, "duration_seconds": 1, "recovery_timeout_seconds": 6, "expected_category": "serial_io_transient"}
+  ]
+}

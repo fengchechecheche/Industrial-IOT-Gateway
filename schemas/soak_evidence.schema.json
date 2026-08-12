@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/industrial_iot_gateway/soak_evidence.schema.json",
+  "title": "Industrial IoT Gateway soak evidence",
+  "oneOf": [
+    {"$ref": "#/$defs/manifest"},
+    {"$ref": "#/$defs/summary"}
+  ],
+  "$defs": {
+    "manifest": {
+      "type": "object",
+      "required": ["schema_version", "run_id", "profile_id", "profile_kind", "source_revision", "started_at_utc", "ended_at_utc", "monotonic_duration_seconds", "status", "worktree_state"],
+      "properties": {
+        "schema_version": {"const": "1.0.0"},
+        "run_id": {"type": "string", "minLength": 1},
+        "profile_id": {"type": "string", "minLength": 1},
+        "profile_kind": {"enum": ["smoke", "preflight", "release"]},
+        "source_revision": {"type": "string", "minLength": 1},
+        "started_at_utc": {"type": "string"},
+        "ended_at_utc": {"type": ["string", "null"]},
+        "monotonic_duration_seconds": {"type": ["number", "null"], "minimum": 0},
+        "status": {"enum": ["RUNNING", "PASS", "FAIL", "ABORTED_ENVIRONMENT"]},
+        "worktree_state": {"const": "not_checked_by_policy"}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["schema_version", "run_id", "status", "long_soak_pass", "metrics", "oracles", "unclosed_failures"],
+      "properties": {
+        "schema_version": {"const": "1.0.0"},
+        "run_id": {"type": "string", "minLength": 1},
+        "status": {"enum": ["PASS", "FAIL", "ABORTED_ENVIRONMENT"]},
+        "long_soak_pass": {"type": "boolean"},
+        "metrics": {"type": "object"},
+        "oracles": {"type": "array"},
+        "unclosed_failures": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

@@ -23,6 +23,8 @@ TEST(StructuredLogTest, FormatsRequiredRequestTransitionFieldsAsOneJsonLine) {
   event.function = 4U;
   event.address = 100U;
   event.deadline_ms = 5000;
+  event.monotonic_ms = 12345U;
+  event.duration_ms = 27U;
   event.previous_state = "waiting_response";
   event.next_state = "retry_wait";
   event.result = "response_timeout";
@@ -34,6 +36,8 @@ TEST(StructuredLogTest, FormatsRequiredRequestTransitionFieldsAsOneJsonLine) {
   EXPECT_NE(line.find("\"attempt\":2"), std::string::npos);
   EXPECT_NE(line.find("\"previous_state\":\"waiting_response\""), std::string::npos);
   EXPECT_NE(line.find("\"result\":\"response_timeout\""), std::string::npos);
+  EXPECT_NE(line.find("\"monotonic_ms\":12345"), std::string::npos);
+  EXPECT_NE(line.find("\"duration_ms\":27"), std::string::npos);
 }
 
 TEST(StructuredLogTest, EscapesQuotesBackslashesAndControlCharacters) {

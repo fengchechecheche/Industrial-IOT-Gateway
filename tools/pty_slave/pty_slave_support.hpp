@@ -79,7 +79,8 @@ using StopRequested = bool (*)() noexcept;
 
 class PtySlaveServer {
 public:
-  PtySlaveServer(RuntimeConfiguration configuration, protocol::ParserTiming timing);
+  PtySlaveServer(RuntimeConfiguration configuration, protocol::ParserTiming timing,
+                 bool diagnostics_enabled = true);
   ~PtySlaveServer();
   PtySlaveServer(PtySlaveServer &&) noexcept;
   PtySlaveServer &operator=(PtySlaveServer &&) noexcept;

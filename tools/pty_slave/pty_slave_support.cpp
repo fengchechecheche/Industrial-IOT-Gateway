@@ -331,8 +331,10 @@ ConfigLoadResult load_runtime_configuration(const std::string &register_map_path
 
 class PtySlaveServer::Impl {
 public:
-  Impl(RuntimeConfiguration runtime_configuration, const protocol::ParserTiming parser_timing)
-      : configuration(std::move(runtime_configuration)), parser(parser_timing) {}
+  Impl(RuntimeConfiguration runtime_configuration, const protocol::ParserTiming parser_timing,
+       const bool diagnostics)
+      : configuration(std::move(runtime_configuration)), parser(parser_timing),
+        diagnostics_enabled(diagnostics) {}
 
   RuntimeConfiguration configuration;
   protocol::RtuStreamParser parser;
@@ -340,6 +342,7 @@ public:
   std::string slave_path{};
   std::string last_error{};
   mutable std::mutex fault_mutex{};
+  bool diagnostics_enabled{true};
 
   [[nodiscard]] FaultPlan fault_plan() const noexcept {
     const std::lock_guard<std::mutex> lock(fault_mutex);
@@ -445,8 +448,8 @@ public:
 };
 
 PtySlaveServer::PtySlaveServer(RuntimeConfiguration configuration,
-                               const protocol::ParserTiming timing)
-    : impl_(std::make_unique<Impl>(std::move(configuration), timing)) {}
+                               const protocol::ParserTiming timing, const bool diagnostics_enabled)
+    : impl_(std::make_unique<Impl>(std::move(configuration), timing, diagnostics_enabled)) {}
 PtySlaveServer::~PtySlaveServer() {
   if (impl_ != nullptr && impl_->master_fd >= 0) {
     static_cast<void>(::close(impl_->master_fd));
@@ -523,7 +526,9 @@ ServerRunResult PtySlaveServer::run(const std::size_t maximum_requests,
           protocol::MonotonicTimeUs{monotonic_time_us()}, events.data(), events.size());
       for (std::size_t index = 0U; index < timed.events_written; ++index) {
         if (std::holds_alternative<protocol::ParserError>(events[index].payload)) {
-          std::cerr << "event=request_parse_error result=discarded\n";
+          if (impl_->diagnostics_enabled) {
+            std::cerr << "event=request_parse_error result=discarded\n";
+          }
         }
       }
       continue;
@@ -558,11 +563,15 @@ ServerRunResult PtySlaveServer::run(const std::size_t maximum_requests,
         const auto *request_event =
             std::get_if<protocol::ParsedRequestEvent>(&events[index].payload);
         if (request_event == nullptr) {
-          std::cerr << "event=request_parse_error result=discarded\n";
+          if (impl_->diagnostics_enabled) {
+            std::cerr << "event=request_parse_error result=discarded\n";
+          }
           continue;
         }
         if (request_slave_id(request_event->request) != impl_->configuration.registers.slave_id()) {
-          std::cerr << "event=request_ignored reason=unexpected_slave\n";
+          if (impl_->diagnostics_enabled) {
+            std::cerr << "event=request_ignored reason=unexpected_slave\n";
+          }
           continue;
         }
 
@@ -570,7 +579,9 @@ ServerRunResult PtySlaveServer::run(const std::size_t maximum_requests,
         const auto fault = impl_->fault_plan();
         const auto mode = fault.mode;
         if (mode == FaultMode::silent) {
-          std::cerr << "event=response request=" << handled << " fault=silent result=dropped\n";
+          if (impl_->diagnostics_enabled) {
+            std::cerr << "event=response request=" << handled << " fault=silent result=dropped\n";
+          }
           continue;
         }
         auto response = impl_->response_for_request(request_event->request, fault);
@@ -587,8 +598,10 @@ ServerRunResult PtySlaveServer::run(const std::size_t maximum_requests,
         if (!impl_->write_all(*response, stop_requested)) {
           return ServerRunResult{false, handled, impl_->last_error};
         }
-        std::cerr << "event=response request=" << handled << " fault=" << fault_mode_name(mode)
-                  << " bytes=" << response->size << " result=sent\n";
+        if (impl_->diagnostics_enabled) {
+          std::cerr << "event=response request=" << handled << " fault=" << fault_mode_name(mode)
+                    << " bytes=" << response->size << " result=sent\n";
+        }
       }
       if (parsed.bytes_consumed == 0U) {
         break;

@@ -7,11 +7,10 @@
 #include <memory>
 #include <string>
 #include <thread>
-#include <vector>
 
 #include "pty_slave_support.hpp"
 
-namespace industrial_iot_gateway::test_support {
+namespace industrial_iot_gateway::simulation {
 
 class PtyBusHarness {
 public:
@@ -51,4 +50,8 @@ private:
   std::thread relay_thread_{};
 };
 
+} // namespace industrial_iot_gateway::simulation
+
+namespace industrial_iot_gateway::test_support {
+using simulation::PtyBusHarness;
 } // namespace industrial_iot_gateway::test_support

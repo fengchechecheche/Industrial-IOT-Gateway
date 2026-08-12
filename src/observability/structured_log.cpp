@@ -89,6 +89,8 @@ std::string format_jsonl(const StructuredEvent &event) {
   append_number(output, "function", event.function);
   append_number(output, "address", event.address);
   append_number(output, "deadline_ms", event.deadline_ms);
+  append_number(output, "monotonic_ms", event.monotonic_ms);
+  append_number(output, "duration_ms", event.duration_ms);
   append_string(output, "previous_state", event.previous_state);
   append_string(output, "next_state", event.next_state);
   append_string(output, "result", event.result);

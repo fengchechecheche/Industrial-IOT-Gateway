@@ -2,7 +2,7 @@
 #include "industrial_iot_gateway/mqtt/mqtt_config.hpp"
 #include "industrial_iot_gateway/mqtt/mqtt_publish_sink.hpp"
 #include "industrial_iot_gateway/runtime/gateway_runtime.hpp"
-#include "pty_bus_harness.hpp"
+#include "industrial_iot_gateway/simulation/pty_bus_harness.hpp"
 
 #include <array>
 #include <atomic>

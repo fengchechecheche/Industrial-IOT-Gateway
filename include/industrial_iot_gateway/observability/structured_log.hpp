@@ -27,6 +27,8 @@ struct StructuredEvent {
   std::optional<std::uint8_t> function{};
   std::optional<std::uint16_t> address{};
   std::optional<std::int64_t> deadline_ms{};
+  std::optional<std::uint64_t> monotonic_ms{};
+  std::optional<std::uint64_t> duration_ms{};
   std::string previous_state{};
   std::string next_state{};
   std::string result{};

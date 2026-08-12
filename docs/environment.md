@@ -138,3 +138,23 @@ F10 在 TSan 下连续三次定向通过，随后全量 TSan 176/176。
 正式证据包含 968 条事件和 68 项 SHA256，独立审计未发现结构、追踪或校验错误。F06、F10、
 F11、F13 的恢复观察值分别为 20、1450、20、20 ms；这些是单次本地观察值，不是生产 SLA。
 本次 P3-S5-T01 结论为 PASS，P0/P1/P2 均为 0，P3-S5-T02 记为 `NOT_TRIGGERED`。
+
+## P3-S5-T03 验证状态
+
+T03 在相同系统依赖上新增标准库 Python soak runner、C++ soak driver、共享 PTY 仿真库、
+profile/evidence schema、`/proc` 资源采样和分段日志；没有安装额外软件包或 Python 第三方包。
+
+| 配置 | 构建 | CTest / 检查结果 |
+|---|---|---|
+| Debug，MQTT ON + PTY + Mosquitto | PASS | PASS，181/181 |
+| ASan + UBSan，MQTT ON | PASS | PASS，181/181 |
+| Release，MQTT ON | PASS | PASS，181/181 |
+| clang-tidy 18，MQTT ON | PASS | 全目标构建完成；T03 driver 新增诊断已清理 |
+| TSan，MQTT ON + WSL2 workaround | PASS | PASS，181/181 |
+| clang-format 18 | PASS | 全项目 `--dry-run --Werror` |
+| Python / JSON / soak 单测 | PASS | `py_compile`、JSON 解析、10/10 |
+| 90 秒 soak smoke | PASS | 4/4 soak CTest；七类故障均触发和恢复 |
+
+最终 smoke 只验证执行工具、逐循环 oracle、资源采样、broker 断线、PTY 重连、日志轮转和有界
+清理，`long_soak_pass=false`。T04 的 3600 秒 preflight 与 S6 的 28800 秒 release 尚未执行，
+因此当前没有软件长稳 PASS、树莓派部署或硬件长稳结论。

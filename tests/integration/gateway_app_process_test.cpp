@@ -1,4 +1,4 @@
-#include "pty_bus_harness.hpp"
+#include "industrial_iot_gateway/simulation/pty_bus_harness.hpp"
 
 #include <array>
 #include <cerrno>

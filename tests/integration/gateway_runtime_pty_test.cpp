@@ -1,6 +1,6 @@
 #include "industrial_iot_gateway/config/runtime_config.hpp"
 #include "industrial_iot_gateway/runtime/gateway_runtime.hpp"
-#include "pty_bus_harness.hpp"
+#include "industrial_iot_gateway/simulation/pty_bus_harness.hpp"
 
 #include <chrono>
 #include <functional>
@@ -265,6 +265,37 @@ TEST(GatewayRuntimePtyTest, ReopensStableDevicePathAfterPtyDisconnect) {
   runtime.join();
   EXPECT_GE(runtime.statistics().serial_open_successes, 2U);
   EXPECT_GT(runtime.statistics().serial_errors, 0U);
+}
+
+TEST(GatewayRuntimePtyTest, DiscardsLateResponseWithoutClosingHealthySerialPort) {
+  PtyBusHarness bus(kRegisterMap, kScenarioMap);
+  ASSERT_TRUE(bus.start()) << bus.last_error();
+  std::ostringstream evidence;
+  auto config = runtime_config_for(bus.gateway_path());
+  config.response_timeout = std::chrono::milliseconds(180);
+  GatewayRuntime runtime(std::move(config), evidence);
+  ASSERT_TRUE(runtime.start());
+  ASSERT_TRUE(wait_until([&runtime] { return runtime.statistics().requests_succeeded >= 20U; },
+                         std::chrono::seconds(3)));
+  const auto successes_before = runtime.statistics().requests_succeeded;
+  ASSERT_TRUE(bus.set_fault(3U, FaultPlan{FaultMode::delayed_response, 650U, 2U, 2U}));
+  ASSERT_TRUE(wait_until([&runtime] { return runtime.statistics().response_timeouts >= 1U; },
+                         std::chrono::seconds(3)));
+  ASSERT_TRUE(bus.set_fault(3U, FaultPlan{}));
+  ASSERT_TRUE(wait_until(
+      [&runtime, successes_before] {
+        const auto statistics = runtime.statistics();
+        return statistics.requests_succeeded > successes_before + 10U &&
+               statistics.slaves[1].requests_succeeded > 0U &&
+               statistics.slaves[2].requests_succeeded > 0U &&
+               statistics.slaves[3].requests_succeeded > 0U;
+      },
+      std::chrono::seconds(10)))
+      << evidence.str();
+  runtime.request_stop(ShutdownReason::service_stop);
+  runtime.join();
+  EXPECT_TRUE(runtime.statistics().stopped);
+  EXPECT_EQ(runtime.statistics().serial_open_successes, 1U);
 }
 
 TEST(GatewayRuntimePtyTest, EmitsStaleOfflineAndRecoversPolling) {

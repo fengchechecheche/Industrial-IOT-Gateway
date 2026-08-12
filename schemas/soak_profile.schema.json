@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/industrial_iot_gateway/soak_profile.schema.json",
+  "title": "Industrial IoT Gateway resolved soak profile",
+  "description": "This schema validates a profile after extends inheritance has been resolved.",
+  "type": "object",
+  "required": ["schema_version", "profile_id", "profile_kind", "duration_seconds", "warmup_seconds", "sample_interval_seconds", "heartbeat_interval_seconds", "heartbeat_timeout_seconds", "fault_cycle_seconds", "fault_cycle_count", "load", "faults", "thresholds", "evidence"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "profile_id": {"type": "string", "minLength": 1},
+    "profile_kind": {"enum": ["smoke", "preflight", "release"]},
+    "duration_seconds": {"type": "integer", "minimum": 60},
+    "warmup_seconds": {"type": "integer", "minimum": 0},
+    "sample_interval_seconds": {"type": "integer", "minimum": 1},
+    "heartbeat_interval_seconds": {"type": "integer", "minimum": 1},
+    "heartbeat_timeout_seconds": {"type": "integer", "minimum": 2},
+    "fault_cycle_seconds": {"type": "integer", "minimum": 1},
+    "fault_cycle_count": {"type": "integer", "minimum": 1},
+    "load": {"type": "object", "required": ["serial", "slave_count", "poll_job_count", "theoretical_poll_rate_per_second", "register_map", "scenario_map", "mqtt"]},
+    "faults": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/fault"}},
+    "thresholds": {"type": "object", "required": ["lifecycle", "requests", "queues", "resources", "disk"]},
+    "evidence": {"type": "object", "required": ["raw_output_prefix", "temperature_required"], "properties": {"raw_output_prefix": {"const": "artifacts/soak/"}, "temperature_required": {"type": "boolean"}}}
+  },
+  "$defs": {
+    "fault": {
+      "type": "object",
+      "required": ["fault_id", "kind", "actor", "offset_seconds", "duration_seconds", "recovery_timeout_seconds", "expected_category"],
+      "properties": {
+        "fault_id": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["silent", "delayed_response", "bad_crc", "truncated_response", "exception_response", "broker_stop", "pty_disconnect"]},
+        "actor": {"enum": ["driver", "runner"]},
+        "target_slave": {"type": "integer", "minimum": 1, "maximum": 247},
+        "offset_seconds": {"type": "number", "minimum": 0},
+        "duration_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "recovery_timeout_seconds": {"type": "number", "minimum": 0},
+        "expected_category": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

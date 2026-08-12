@@ -49,6 +49,7 @@ struct AttemptOutcome {
   scheduler::RequestResultCategory category{scheduler::RequestResultCategory::response_timeout};
   std::optional<protocol::Response> response{};
   std::optional<std::uint8_t> exception_code{};
+  bool requires_serial_reopen{};
 };
 
 [[nodiscard]] std::uint8_t request_slave_id(const protocol::Request &request) noexcept {
@@ -278,12 +279,18 @@ private:
   void log(const std::string &event, const std::string &component,
            observability::LogSeverity severity,
            const scheduler::ScheduledRequest *request = nullptr,
-           scheduler::RequestResultCategory result = scheduler::RequestResultCategory::success) {
+           scheduler::RequestResultCategory result = scheduler::RequestResultCategory::success,
+           std::optional<std::uint64_t> duration_ms = std::nullopt) {
     observability::StructuredEvent value{};
     value.event = event;
     value.component = component;
     value.severity = severity;
     value.result = result_name(result);
+    value.monotonic_ms =
+        static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                       RuntimeClock::now().time_since_epoch())
+                                       .count());
+    value.duration_ms = duration_ms;
     if (request != nullptr) {
       value.request_id = request->request_id;
       value.attempt = request->attempt;
@@ -451,17 +458,20 @@ private:
         break;
       }
       if (ready.peer_closed) {
-        return {scheduler::RequestResultCategory::serial_io_transient, std::nullopt, std::nullopt};
+        return {scheduler::RequestResultCategory::serial_io_transient, std::nullopt, std::nullopt,
+                true};
       }
       if (ready.status != transport::WaitStatus::ready) {
-        return {scheduler::RequestResultCategory::serial_io_transient, std::nullopt, std::nullopt};
+        return {scheduler::RequestResultCategory::serial_io_transient, std::nullopt, std::nullopt,
+                true};
       }
       const auto read = serial.read_some(input.data(), input.size());
       if (read.status == transport::IoStatus::would_block) {
         continue;
       }
       if (read.status != transport::IoStatus::completed || read.bytes_transferred == 0U) {
-        return {scheduler::RequestResultCategory::serial_io_transient, std::nullopt, std::nullopt};
+        return {scheduler::RequestResultCategory::serial_io_transient, std::nullopt, std::nullopt,
+                true};
       }
       received_any = true;
       const auto now = RuntimeClock::now();
@@ -536,8 +546,7 @@ private:
           statistics_value.maximum_in_flight_requests, statistics_value.in_flight_requests);
     }
     auto outcome = receive_response(serial, request, deadline);
-    if (outcome.category == scheduler::RequestResultCategory::serial_io_transient &&
-        serial.is_open()) {
+    if (outcome.requires_serial_reopen && serial.is_open()) {
       serial.close();
       const std::lock_guard<std::mutex> lock(statistics_mutex);
       ++statistics_value.serial_close_count;
@@ -591,10 +600,14 @@ private:
           static_cast<void>(scheduler_feedback.try_push(AttemptSentFeedback{
               request.request_id, request.poll_job_id, request.attempt, RuntimeClock::now()}));
         }
+        const auto attempt_started = RuntimeClock::now();
         const auto outcome = execute_request(serial, request);
         const auto observed_at = RuntimeClock::now();
+        const auto duration_ms = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(observed_at - attempt_started)
+                .count());
         log("request_completed", "serial", observability::LogSeverity::info, &request,
-            outcome.category);
+            outcome.category, duration_ms);
 
         if (outcome.category == scheduler::RequestResultCategory::success &&
             outcome.response.has_value()) {

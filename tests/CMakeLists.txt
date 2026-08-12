@@ -2,6 +2,25 @@ find_package(GTest CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
+add_test(
+  NAME soak_profile_contract
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/soak/test_soak_profile.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(soak_profile_contract PROPERTIES LABELS "unit;soak" TIMEOUT 15)
+add_test(
+  NAME soak_runner_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/soak/test_soak_runner.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(soak_runner_unit PROPERTIES LABELS "unit;soak" TIMEOUT 15)
+add_test(
+  NAME soak_summary_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/soak/test_soak_summary.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(soak_summary_unit PROPERTIES LABELS "unit;soak" TIMEOUT 15)
+
 add_executable(gateway_smoke_test unit/build_info_test.cpp)
 target_link_libraries(
   gateway_smoke_test
@@ -212,14 +231,29 @@ if(GATEWAY_ENABLE_MQTT)
   gateway_enable_clang_tidy(gateway_mqtt_broker_integration_test)
 endif()
 if(GATEWAY_ENABLE_MQTT AND GATEWAY_BUILD_PTY_SLAVE)
+  add_test(
+    NAME soak_smoke_integration
+    COMMAND
+      "${Python3_EXECUTABLE}" tests/soak/run_smoke_ctest.py
+      --driver $<TARGET_FILE:gateway_soak_driver>
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+  )
+  set_tests_properties(
+    soak_smoke_integration
+    PROPERTIES LABELS "integration;soak" RUN_SERIAL TRUE TIMEOUT 130
+  )
+  if(GATEWAY_TSAN_TEST_EXECUTOR)
+    list(JOIN GATEWAY_TSAN_TEST_EXECUTOR " " gateway_soak_tsan_executor)
+    set_tests_properties(
+      soak_smoke_integration
+      PROPERTIES ENVIRONMENT "GATEWAY_SOAK_DRIVER_EXECUTOR=${gateway_soak_tsan_executor}"
+    )
+    unset(gateway_soak_tsan_executor)
+  endif()
+
   add_executable(
     gateway_mqtt_pty_runtime_integration_test
     integration/mqtt_pty_runtime_integration_test.cpp
-    support/pty_bus_harness.cpp
-  )
-  target_include_directories(
-    gateway_mqtt_pty_runtime_integration_test
-    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/support"
   )
   target_link_libraries(
     gateway_mqtt_pty_runtime_integration_test
@@ -227,6 +261,7 @@ if(GATEWAY_ENABLE_MQTT AND GATEWAY_BUILD_PTY_SLAVE)
       industrial_iot_gateway::gateway_mqtt
       gateway_project_options
       pty_slave_support
+      industrial_iot_gateway::gateway_simulation
       GTest::gtest_main
       Threads::Threads
       "${GATEWAY_UTIL_LIBRARY}"
@@ -243,11 +278,6 @@ if(GATEWAY_ENABLE_MQTT AND GATEWAY_BUILD_PTY_SLAVE)
   add_executable(
     gateway_mqtt_slow_ack_integration_test
     integration/mqtt_slow_ack_integration_test.cpp
-    support/pty_bus_harness.cpp
-  )
-  target_include_directories(
-    gateway_mqtt_slow_ack_integration_test
-    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/support"
   )
   target_link_libraries(
     gateway_mqtt_slow_ack_integration_test
@@ -255,6 +285,7 @@ if(GATEWAY_ENABLE_MQTT AND GATEWAY_BUILD_PTY_SLAVE)
       industrial_iot_gateway::gateway_mqtt
       gateway_project_options
       pty_slave_support
+      industrial_iot_gateway::gateway_simulation
       GTest::gtest_main
       Threads::Threads
       "${GATEWAY_UTIL_LIBRARY}"
@@ -316,15 +347,14 @@ if(GATEWAY_BUILD_PTY_SLAVE)
   add_executable(
     gateway_runtime_pty_test
     integration/gateway_runtime_pty_test.cpp
-    support/pty_bus_harness.cpp
   )
-  target_include_directories(gateway_runtime_pty_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/support")
   target_link_libraries(
     gateway_runtime_pty_test
     PRIVATE
       industrial_iot_gateway::gateway_core
       gateway_project_options
       pty_slave_support
+      industrial_iot_gateway::gateway_simulation
       GTest::gtest_main
       Threads::Threads
       "${GATEWAY_UTIL_LIBRARY}"
@@ -340,15 +370,14 @@ if(GATEWAY_BUILD_PTY_SLAVE)
   add_executable(
     gateway_app_process_test
     integration/gateway_app_process_test.cpp
-    support/pty_bus_harness.cpp
   )
-  target_include_directories(gateway_app_process_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/support")
   target_link_libraries(
     gateway_app_process_test
     PRIVATE
       industrial_iot_gateway::gateway_core
       gateway_project_options
       pty_slave_support
+      industrial_iot_gateway::gateway_simulation
       GTest::gtest_main
       Threads::Threads
       "${GATEWAY_UTIL_LIBRARY}"

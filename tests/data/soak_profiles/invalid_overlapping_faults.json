@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0.0",
+  "extends": "software_smoke.json",
+  "profile_id": "invalid_overlap",
+  "faults": [
+    {"fault_id": "one", "kind": "silent", "actor": "driver", "target_slave": 3, "offset_seconds": 10, "duration_seconds": 10, "recovery_timeout_seconds": 10, "expected_category": "response_timeout"},
+    {"fault_id": "two", "kind": "bad_crc", "actor": "driver", "target_slave": 3, "offset_seconds": 15, "duration_seconds": 2, "recovery_timeout_seconds": 5, "expected_category": "crc_mismatch"}
+  ]
+}
