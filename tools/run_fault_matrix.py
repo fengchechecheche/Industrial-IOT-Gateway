@@ -13,12 +13,14 @@ from fault_matrix.runner import run_scenarios
 
 
 def _parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the P3-S4-T03 software fault matrix")
+    parser = argparse.ArgumentParser(description="Run the software fault matrix")
     parser.add_argument("--profile", default="software")
     parser.add_argument("--build-dir", type=pathlib.Path, required=True)
     parser.add_argument("--output-root", type=pathlib.Path, default=pathlib.Path("artifacts/baseline"))
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--exploratory", action="store_true")
+    parser.add_argument("--stage", default="S4")
+    parser.add_argument("--task", default="P3-S4-T03")
     return parser.parse_args()
 
 
@@ -90,6 +92,8 @@ def main() -> int:
         run_id=run_id,
         source_revision=args.source_revision,
         exploratory=args.exploratory,
+        stage=args.stage,
+        task=args.task,
     )
     print(json.dumps({"run_id": run_id, "status": result.status.value, "output": result.output_directory}))
     if result.status == ScenarioStatus.PASS:

@@ -316,11 +316,15 @@ private:
     }
     emit("mqtt_publish_attempt", observability::LogSeverity::debug);
     try {
-      auto token =
+      // Paho signals token completion from its receive thread. Keep two generations alive so the
+      // callback that signalled the previous token has returned before that token is destroyed.
+      // This is bounded because max_inflight is fixed to one.
+      previous_publish_token_ = std::move(active_publish_token_);
+      active_publish_token_ =
           client_->publish(publication->topic, publication->payload.data(),
                            publication->payload.size(), publication->qos, publication->retain);
       while (Clock::now() < deadline) {
-        if (token->wait_for(std::chrono::milliseconds{25})) {
+        if (active_publish_token_->wait_for(std::chrono::milliseconds{25})) {
           const std::lock_guard<std::mutex> lock(statistics_mutex_);
           ++statistics_.publish_successes;
           return true;
@@ -471,6 +475,8 @@ private:
   pipeline::PublishQueue queue_;
   ReconnectPolicy reconnect_policy_{};
   ::mqtt::token_ptr disconnect_token_{};
+  ::mqtt::delivery_token_ptr previous_publish_token_{};
+  ::mqtt::delivery_token_ptr active_publish_token_{};
   std::unique_ptr<::mqtt::async_client> client_{};
   std::thread worker_{};
   std::atomic<bool> started_{};

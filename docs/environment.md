@@ -121,3 +121,20 @@ TSan 首轮 175/176，F11 暴露 MQTT worker 读取 `drain_deadline_` 与主线�
 认证、跨主机网络、真实 RS485 电气层或硬件台架行为。
 
 `P3-S2-T01` 的历史基线仍保留，但不再代表仓库当前能力上限。
+
+## P3-S5-T01 预检状态
+
+2026-08-12 在系统依赖不变的条件下启动 S5 软件故障矩阵复核。历史 S4 正式 G3 基线通过
+结构、事件追踪和 68 项 SHA256 复核。当前代码的探索性运行
+`20260812T132741Z_g3_uncommi_001` 为 F01–F15 15/15 PASS、未关闭失败 0，并正确记录
+`gate=G3`、`stage=S5`、`task=P3-S5-T01`；由于 `source_revision=uncommitted`，该结果不是
+正式 S5 验收证据。
+
+质量门在最终预检代码上得到：Debug、ASan/UBSan、Release、TSan 均为 176/176 PASS，
+clang-tidy 全目标构建完成，clang-format、Python 语法和 JSON 解析通过。TSan 首轮在 F10
+捕获 Paho publish delivery token 的完成回调与 token 析构并发；通过有界保留两代 token，
+F10 在 TSan 下连续三次定向通过，随后全量 TSan 176/176。
+
+正式 S5 矩阵仍等待包含 runner 阶段元数据修复和 MQTT token 生命周期修复的提交 ID。提交形成
+后必须重新构建并以 `exploratory=false` 写入独立 S5 证据目录，才能给出 P3-S5-T01 的最终
+PASS/FAIL 结论。

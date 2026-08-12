@@ -53,6 +53,25 @@ class ProcessManagerTest(unittest.TestCase):
 
 
 class EvidenceWriterTest(unittest.TestCase):
+    def test_records_requested_stage_and_task_in_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = pathlib.Path(temporary) / "run"
+            writer = EvidenceWriter(
+                output,
+                run_id="20260812T000000Z_g3_abcdef0_001",
+                source_revision="abcdef0",
+                exploratory=False,
+                stage="S5",
+                task="P3-S5-T01",
+            )
+            writer.begin_run({"profile": "software"})
+            writer.finish_run(ScenarioStatus.PASS)
+
+            manifest = json.loads((output / "manifest.json").read_text())
+            self.assertEqual(manifest["gate"], "G3")
+            self.assertEqual(manifest["stage"], "S5")
+            self.assertEqual(manifest["task"], "P3-S5-T01")
+
     def test_writes_required_files_and_valid_checksums(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = pathlib.Path(temporary) / "run"

@@ -27,12 +27,16 @@ def run_scenarios(
     run_id: str,
     source_revision: str,
     exploratory: bool,
+    stage: str = "S4",
+    task: str = "P3-S4-T03",
 ) -> MatrixExecution:
     writer = EvidenceWriter(
         output_directory,
         run_id=run_id,
         source_revision=source_revision,
         exploratory=exploratory,
+        stage=stage,
+        task=task,
     )
     writer.begin_run(
         {

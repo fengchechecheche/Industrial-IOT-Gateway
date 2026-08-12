@@ -56,11 +56,15 @@ class EvidenceWriter:
         run_id: str,
         source_revision: str,
         exploratory: bool,
+        stage: str = "S4",
+        task: str = "P3-S4-T03",
     ) -> None:
         self.output_directory = output_directory
         self.run_id = run_id
         self.source_revision = source_revision
         self.exploratory = exploratory
+        self.stage = stage
+        self.task = task
         self.started_utc = _utc_now()
         self.started_monotonic = time.monotonic()
         self._event_sequence = 0
@@ -77,8 +81,8 @@ class EvidenceWriter:
                 "schema_version": SCHEMA_VERSION,
                 "run_id": self.run_id,
                 "gate": "G3",
-                "stage": "S4",
-                "task": "P3-S4-T03",
+                "stage": self.stage,
+                "task": self.task,
                 "started_at_utc": self.started_utc,
                 "ended_at_utc": None,
                 "source_revision": self.source_revision,

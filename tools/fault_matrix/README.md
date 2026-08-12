@@ -1,6 +1,7 @@
 # 软件故障矩阵运行器
 
-本目录实现 `P3-S4-T03` 的可重复故障注入编排。运行器使用 Python 标准库逐项调用
+本目录实现可重复的软件故障注入编排。`P3-S4-T03` 建立初始 G3 基线，`P3-S5-T01`
+使用同一份已审核 `software` profile 进行发布前复核。运行器使用 Python 标准库逐项调用
 CTest 场景，保证超时后回收整个进程组，并把机器可判定的结果写入结构化证据目录。
 
 ## 运行前提
@@ -17,10 +18,12 @@ CTest 场景，保证超时后回收整个进程组，并把机器可判定的�
 ```bash
 python3 tools/run_fault_matrix.py \
   --profile software \
-  --build-dir /tmp/industrial_iot_gateway_s4_t03_debug \
-  --output-root artifacts/baseline \
+  --build-dir /tmp/industrial_iot_gateway_s5_t01_debug \
+  --output-root /tmp/industrial_iot_gateway_s5_t01_exploratory \
   --source-revision uncommitted \
-  --exploratory
+  --exploratory \
+  --stage S5 \
+  --task P3-S5-T01
 ```
 
 探索性结果可用于调试和候选验收，但不能冒充绑定到提交的正式 G3 基线。
@@ -32,14 +35,19 @@ python3 tools/run_fault_matrix.py \
 ```bash
 python3 tools/run_fault_matrix.py \
   --profile software \
-  --build-dir /tmp/industrial_iot_gateway_s4_t03_debug \
-  --output-root artifacts/baseline \
-  --source-revision 0123456789abcdef
+  --build-dir /tmp/industrial_iot_gateway_s5_t01_debug \
+  --output-root artifacts/fault_matrix/s5 \
+  --source-revision 0123456789abcdef \
+  --stage S5 \
+  --task P3-S5-T01
 ```
 
 运行器只校验参数格式，不自行调用 Git。执行完成后，退出码 `0` 表示十五个场景均通过；
 参数或 profile 错误返回 `2`，构建目录不存在返回 `3`，场景失败返回 `4`，证据完整性
 错误返回 `5`。
+
+`--stage` 和 `--task` 会原样写入 `manifest.json`。默认值仍为 `S4` 和 `P3-S4-T03`，以兼容
+既有基线命令；执行 S5 时必须显式传入上述两个参数，防止证据所属阶段被错误标注。
 
 ## 证据结构
 
@@ -63,4 +71,5 @@ F06、F10、F11 和 F13 必须由集成测试输出
 - 每个场景有独立超时，超时先向进程组发送 SIGTERM，宽限期后再发送 SIGKILL；
 - 一个场景失败后仍继续执行其余场景，最终统一返回失败；
 - `SHA256SUMS` 覆盖本次运行的全部证据文件；
-- `artifacts/baseline/` 默认被忽略，是否归档或公开必须由项目所有者另行决定。
+- `artifacts/baseline/` 与 `artifacts/fault_matrix/` 默认作为本地证据处理，是否归档或公开必须
+  由项目所有者另行决定。
