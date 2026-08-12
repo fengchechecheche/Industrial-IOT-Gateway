@@ -267,35 +267,49 @@ TEST(GatewayRuntimePtyTest, ReopensStableDevicePathAfterPtyDisconnect) {
   EXPECT_GT(runtime.statistics().serial_errors, 0U);
 }
 
-TEST(GatewayRuntimePtyTest, DiscardsLateResponseWithoutClosingHealthySerialPort) {
+TEST(GatewayRuntimePtyTest, QuarantinesLateResponseWithoutPollutingNextTransaction) {
   PtyBusHarness bus(kRegisterMap, kScenarioMap);
   ASSERT_TRUE(bus.start()) << bus.last_error();
   std::ostringstream evidence;
   auto config = runtime_config_for(bus.gateway_path());
-  config.response_timeout = std::chrono::milliseconds(180);
+  config.response_timeout = std::chrono::milliseconds(500);
+  config.late_response_guard = std::chrono::milliseconds(200);
   GatewayRuntime runtime(std::move(config), evidence);
   ASSERT_TRUE(runtime.start());
   ASSERT_TRUE(wait_until([&runtime] { return runtime.statistics().requests_succeeded >= 20U; },
                          std::chrono::seconds(3)));
-  const auto successes_before = runtime.statistics().requests_succeeded;
+  const auto before = runtime.statistics();
   ASSERT_TRUE(bus.set_fault(3U, FaultPlan{FaultMode::delayed_response, 650U, 2U, 2U}));
-  ASSERT_TRUE(wait_until([&runtime] { return runtime.statistics().response_timeouts >= 1U; },
-                         std::chrono::seconds(3)));
+  ASSERT_TRUE(wait_until(
+      [&runtime, &before] {
+        const auto statistics = runtime.statistics();
+        return statistics.response_timeouts > before.response_timeouts &&
+               statistics.late_response_quarantines > before.late_response_quarantines &&
+               statistics.late_response_bytes_discarded >=
+                   before.late_response_bytes_discarded + 5U;
+      },
+      std::chrono::seconds(4)))
+      << evidence.str();
   ASSERT_TRUE(bus.set_fault(3U, FaultPlan{}));
   ASSERT_TRUE(wait_until(
-      [&runtime, successes_before] {
+      [&runtime, &before] {
         const auto statistics = runtime.statistics();
-        return statistics.requests_succeeded > successes_before + 10U &&
-               statistics.slaves[1].requests_succeeded > 0U &&
-               statistics.slaves[2].requests_succeeded > 0U &&
-               statistics.slaves[3].requests_succeeded > 0U;
+        return statistics.slaves[1].requests_succeeded > before.slaves[1].requests_succeeded &&
+               statistics.slaves[2].requests_succeeded > before.slaves[2].requests_succeeded &&
+               statistics.slaves[3].requests_succeeded > before.slaves[3].requests_succeeded;
       },
       std::chrono::seconds(10)))
       << evidence.str();
   runtime.request_stop(ShutdownReason::service_stop);
   runtime.join();
-  EXPECT_TRUE(runtime.statistics().stopped);
-  EXPECT_EQ(runtime.statistics().serial_open_successes, 1U);
+  const auto after = runtime.statistics();
+  EXPECT_TRUE(after.stopped);
+  EXPECT_EQ(after.serial_open_successes, 1U);
+  EXPECT_EQ(after.serial_errors, before.serial_errors);
+  EXPECT_GT(after.late_response_quarantines, before.late_response_quarantines);
+  EXPECT_GT(after.late_response_bytes_discarded, before.late_response_bytes_discarded);
+  EXPECT_NE(evidence.str().find("late_response_quarantine_started"), std::string::npos);
+  EXPECT_NE(evidence.str().find("late_response_discarded"), std::string::npos);
 }
 
 TEST(GatewayRuntimePtyTest, EmitsStaleOfflineAndRecoversPolling) {

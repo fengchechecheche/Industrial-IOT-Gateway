@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "software_release_v2",
+  "profile_kind": "release",
+  "duration_seconds": 28800,
+  "warmup_seconds": 600,
+  "sample_interval_seconds": 5,
+  "heartbeat_interval_seconds": 5,
+  "heartbeat_timeout_seconds": 30,
+  "fault_cycle_seconds": 3600,
+  "fault_cycle_count": 8,
+  "load": {
+    "serial": {"baud": 19200, "data_bits": 8, "parity": "even", "stop_bits": 1},
+    "slave_count": 3,
+    "poll_job_count": 16,
+    "theoretical_poll_rate_per_second": 26.2,
+    "register_map": "config/examples/register_map.yaml",
+    "scenario_map": "config/examples/pty_slave_scenarios.yaml",
+    "mqtt": {
+      "protocol": "3.1.1",
+      "qos": 1,
+      "broker_host": "127.0.0.1",
+      "broker_port": 18884,
+      "anonymous": true,
+      "subscribe_topic": "industrial_iot_gateway/#"
+    }
+  },
+  "faults": [
+    {"fault_id": "silent", "kind": "silent", "actor": "driver", "target_slave": 3, "offset_seconds": 600, "duration_seconds": 15, "recovery_timeout_seconds": 15, "expected_category": "response_timeout"},
+    {"fault_id": "delayed", "kind": "delayed_response", "actor": "driver", "target_slave": 3, "offset_seconds": 1200, "duration_seconds": 15, "recovery_timeout_seconds": 15, "delay_ms": 650, "expected_category": "response_timeout"},
+    {"fault_id": "bad_crc", "kind": "bad_crc", "actor": "driver", "target_slave": 3, "offset_seconds": 1800, "duration_seconds": 15, "recovery_timeout_seconds": 15, "expected_category": "crc_mismatch"},
+    {"fault_id": "truncated", "kind": "truncated_response", "actor": "driver", "target_slave": 3, "offset_seconds": 2400, "duration_seconds": 15, "recovery_timeout_seconds": 15, "truncate_bytes": 2, "expected_category": "truncated_frame"},
+    {"fault_id": "exception_02", "kind": "exception_response", "actor": "driver", "target_slave": 3, "offset_seconds": 2700, "duration_seconds": 15, "recovery_timeout_seconds": 15, "exception_code": 2, "expected_category": "remote_exception"},
+    {"fault_id": "broker_stop", "kind": "broker_stop", "actor": "runner", "offset_seconds": 3000, "duration_seconds": 30, "recovery_timeout_seconds": 45, "expected_category": "mqtt_disconnected"},
+    {"fault_id": "pty_disconnect", "kind": "pty_disconnect", "actor": "driver", "offset_seconds": 3300, "duration_seconds": 3, "recovery_timeout_seconds": 15, "expected_category": "serial_io_transient"}
+  ],
+  "thresholds": {
+    "lifecycle": {"shutdown_timeout_seconds": 5, "unexpected_exits_max": 0, "critical_events_max": 0, "parse_errors_max": 0, "freshness_violations_max": 0},
+    "requests": {"success_rate_min": 0.999, "throughput_min_per_second": 20.96, "latency_p95_ms_max": 100, "latency_p99_ms_max": 250, "latency_max_ms_exclusive": 500, "non_target_starvation_seconds_max": 10, "unclassified_errors_max": 0},
+    "queues": {"request_rejections_max": 0, "measurement_enqueue_failures_max": 0, "critical_enqueue_failures_max": 0, "drain_expired_max": 0, "unconfirmed_on_close_max": 0, "dropped_must_equal_expired_fresh": true},
+    "resources": {"rss_peak_mib_max": 256, "rss_slope_mib_per_hour_max": 2, "rss_stable_delta_mib_max": 16, "cpu_average_percent_max": 50, "cpu_p95_percent_max": 80, "cpu_high_percent": 90, "cpu_high_duration_seconds_max": 300, "fd_peak_max": 64, "fd_stable_drift_max": 4, "thread_peak_max": 32, "thread_stable_drift_max": 2},
+    "disk": {"start_free_gib_min": 10, "runtime_free_gib_min": 5, "evidence_bytes_max": 5368709120, "log_segment_bytes_max": 67108864}
+  },
+  "evidence": {"raw_output_prefix": "artifacts/soak/", "temperature_required": false}
+}

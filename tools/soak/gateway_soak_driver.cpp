@@ -97,6 +97,8 @@ queue_json(const industrial_iot_gateway::concurrency::QueueStatistics &statistic
           {"requests_succeeded", statistics.requests_succeeded},
           {"requests_failed", statistics.requests_failed},
           {"response_timeouts", statistics.response_timeouts},
+          {"late_response_quarantines", statistics.late_response_quarantines},
+          {"late_response_bytes_discarded", statistics.late_response_bytes_discarded},
           {"crc_errors", statistics.crc_errors},
           {"truncated_frames", statistics.truncated_frames},
           {"remote_exceptions", statistics.remote_exceptions},
@@ -212,6 +214,7 @@ int run(int argc, char **argv) {
   runtime_config.serial.device_path = bus.gateway_path();
   runtime_config.registers = std::move(*loaded.configuration);
   runtime_config.response_timeout = std::chrono::milliseconds(500);
+  runtime_config.late_response_guard = std::chrono::milliseconds(200);
   runtime_config.serial_reopen_backoff = std::chrono::milliseconds(100);
 
   auto logger =

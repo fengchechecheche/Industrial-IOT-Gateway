@@ -52,6 +52,11 @@ struct AttemptOutcome {
   bool requires_serial_reopen{};
 };
 
+struct LateResponseQuarantineOutcome {
+  std::size_t bytes_discarded{};
+  bool requires_serial_reopen{};
+};
+
 [[nodiscard]] std::uint8_t request_slave_id(const protocol::Request &request) noexcept {
   if (const auto *read = std::get_if<protocol::ReadRequest>(&request)) {
     return read->slave_id;
@@ -157,7 +162,9 @@ public:
       error = RuntimeErrorCategory::invalid_register_configuration;
       return;
     }
-    if (config.response_timeout.count() <= 0 || config.serial_reopen_backoff.count() <= 0) {
+    if (config.response_timeout.count() <= 0 || config.late_response_guard.count() <= 0 ||
+        config.late_response_guard > std::chrono::seconds(1) ||
+        config.serial_reopen_backoff.count() <= 0) {
       error = RuntimeErrorCategory::invalid_timing;
       return;
     }
@@ -441,6 +448,64 @@ private:
     }
   }
 
+  [[nodiscard]] LateResponseQuarantineOutcome
+  quarantine_late_response(transport::SerialPort &serial,
+                           const scheduler::ScheduledRequest &request,
+                           scheduler::RequestResultCategory original_result) {
+    constexpr auto frame_boundary = std::chrono::microseconds(2'006);
+    constexpr auto maximum_frame_transfer = std::chrono::milliseconds(150);
+    const auto started_at = RuntimeClock::now();
+    const auto listen_deadline = started_at + config.late_response_guard;
+    const auto overall_deadline = listen_deadline + maximum_frame_transfer + frame_boundary;
+    auto last_byte_at = started_at;
+    bool received_any{};
+    LateResponseQuarantineOutcome outcome{};
+    std::array<std::uint8_t, protocol::kMaxModbusAduSize> bytes{};
+
+    log("late_response_quarantine_started", "serial", observability::LogSeverity::warning, &request,
+        original_result);
+    while (serial.is_open() && !stop_requested.load()) {
+      const auto deadline = received_any ? std::min(overall_deadline, last_byte_at + frame_boundary)
+                                         : listen_deadline;
+      const auto ready = serial.wait({true, false}, deadline);
+      if (ready.status == transport::WaitStatus::timeout) {
+        break;
+      }
+      if (ready.peer_closed || ready.status != transport::WaitStatus::ready) {
+        outcome.requires_serial_reopen = true;
+        break;
+      }
+      const auto read = serial.read_some(bytes.data(), bytes.size());
+      if (read.status == transport::IoStatus::would_block) {
+        continue;
+      }
+      if (read.status != transport::IoStatus::completed || read.bytes_transferred == 0U) {
+        outcome.requires_serial_reopen = true;
+        break;
+      }
+      outcome.bytes_discarded += read.bytes_transferred;
+      received_any = true;
+      last_byte_at = RuntimeClock::now();
+    }
+
+    {
+      const std::lock_guard<std::mutex> lock(statistics_mutex);
+      ++statistics_value.late_response_quarantines;
+      statistics_value.late_response_bytes_discarded += outcome.bytes_discarded;
+    }
+    if (outcome.bytes_discarded > 0U) {
+      const auto duration_ms = static_cast<std::uint64_t>(
+          std::chrono::duration_cast<std::chrono::milliseconds>(RuntimeClock::now() - started_at)
+              .count());
+      log("late_response_discarded", "serial", observability::LogSeverity::warning, &request,
+          original_result, duration_ms);
+    } else {
+      log("late_response_quarantine_completed", "serial", observability::LogSeverity::debug,
+          &request, original_result);
+    }
+    return outcome;
+  }
+
   [[nodiscard]] AttemptOutcome receive_response(transport::SerialPort &serial,
                                                 const scheduler::ScheduledRequest &request,
                                                 RuntimeTimePoint deadline) {
@@ -546,6 +611,12 @@ private:
           statistics_value.maximum_in_flight_requests, statistics_value.in_flight_requests);
     }
     auto outcome = receive_response(serial, request, deadline);
+    if (!outcome.requires_serial_reopen &&
+        (outcome.category == scheduler::RequestResultCategory::response_timeout ||
+         outcome.category == scheduler::RequestResultCategory::truncated_frame)) {
+      const auto quarantine = quarantine_late_response(serial, request, outcome.category);
+      outcome.requires_serial_reopen = quarantine.requires_serial_reopen;
+    }
     if (outcome.requires_serial_reopen && serial.is_open()) {
       serial.close();
       const std::lock_guard<std::mutex> lock(statistics_mutex);

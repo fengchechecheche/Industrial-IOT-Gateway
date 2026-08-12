@@ -20,6 +20,8 @@ class SoakProfileContractTest(unittest.TestCase):
         paths = [
             ROOT / "config/soak/software_release.json",
             ROOT / "config/soak/software_preflight.json",
+            ROOT / "config/soak/software_release_v2.json",
+            ROOT / "config/soak/software_preflight_v2.json",
             ROOT / "tests/data/soak_profiles/software_smoke.json",
         ]
         for path in paths:
@@ -31,6 +33,42 @@ class SoakProfileContractTest(unittest.TestCase):
         release = load_and_validate_profile(ROOT / "config/soak/software_release.json", ROOT)
         preflight = load_and_validate_profile(ROOT / "config/soak/software_preflight.json", ROOT)
         validate_profile_pair(release, preflight)
+
+        release_v2 = load_and_validate_profile(
+            ROOT / "config/soak/software_release_v2.json", ROOT
+        )
+        preflight_v2 = load_and_validate_profile(
+            ROOT / "config/soak/software_preflight_v2.json", ROOT
+        )
+        validate_profile_pair(release_v2, preflight_v2)
+
+    def test_v2_keeps_fairness_and_versions_the_disk_budget(self) -> None:
+        release_v1 = load_and_validate_profile(
+            ROOT / "config/soak/software_release.json", ROOT
+        )
+        release_v2 = load_and_validate_profile(
+            ROOT / "config/soak/software_release_v2.json", ROOT
+        )
+
+        self.assertEqual(
+            release_v1["thresholds"]["requests"]["non_target_starvation_seconds_max"],
+            10,
+        )
+        self.assertEqual(
+            release_v2["thresholds"]["requests"]["non_target_starvation_seconds_max"],
+            10,
+        )
+        self.assertEqual(
+            release_v2["thresholds"]["disk"],
+            {
+                "start_free_gib_min": 10,
+                "runtime_free_gib_min": 5,
+                "evidence_bytes_max": 5 * 1024**3,
+                "log_segment_bytes_max": 64 * 1024**2,
+            },
+        )
+        self.assertEqual(release_v1["profile_id"], "software_release_v1")
+        self.assertEqual(release_v2["profile_id"], "software_release_v2")
 
     def test_overlapping_fault_window_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "overlap"):

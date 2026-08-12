@@ -82,6 +82,16 @@ class SoakSummaryUnitTest(unittest.TestCase):
                     "duration_ms": 1,
                 }
             )
+            if fault["kind"] == "delayed_response":
+                gateway_events.append(
+                    {
+                        "event": "late_response_discarded",
+                        "monotonic_ms": 2600,
+                        "slave_id": 3,
+                        "result": "response_timeout",
+                        "duration_ms": 152,
+                    }
+                )
         (directory / "gateway_0001.jsonl").write_text(
             "".join(json.dumps(item) + "\n" for item in gateway_events), encoding="utf-8"
         )
@@ -129,6 +139,31 @@ class SoakSummaryUnitTest(unittest.TestCase):
             summary = summarize(directory)
             self.assertEqual(summary["status"], "FAIL")
             self.assertGreater(summary["unclosed_failures"], 0)
+
+    def test_delayed_fault_requires_late_response_discard_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            self.make_evidence(directory)
+            gateway_path = directory / "gateway_0001.jsonl"
+            gateway = [json.loads(line) for line in gateway_path.read_text().splitlines()]
+            gateway_path.write_text(
+                "".join(
+                    json.dumps(item) + "\n"
+                    for item in gateway
+                    if item.get("event") != "late_response_discarded"
+                ),
+                encoding="utf-8",
+            )
+
+            summary = summarize(directory)
+
+            self.assertEqual(summary["status"], "FAIL")
+            failed_oracles = {
+                oracle["oracle_id"]
+                for oracle in summary["oracles"]
+                if oracle["enforced"] and not oracle["passed"]
+            }
+            self.assertIn("fault.delayed.cycle_0.late_response_discarded", failed_oracles)
 
     def test_missing_second_fault_cycle_returns_non_pass(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

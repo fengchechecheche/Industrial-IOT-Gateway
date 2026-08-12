@@ -156,5 +156,32 @@ profile/evidence schema、`/proc` 资源采样和分段日志；没有安装额�
 | 90 秒 soak smoke | PASS | 4/4 soak CTest；七类故障均触发和恢复 |
 
 最终 smoke 只验证执行工具、逐循环 oracle、资源采样、broker 断线、PTY 重连、日志轮转和有界
-清理，`long_soak_pass=false`。T04 的 3600 秒 preflight 与 S6 的 28800 秒 release 尚未执行，
-因此当前没有软件长稳 PASS、树莓派部署或硬件长稳结论。
+清理，`long_soak_pass=false`。T04 后续已经执行但结论为 FAIL；S6 的 28800 秒 release 尚未
+执行，因此当前没有软件长稳 PASS、树莓派部署或硬件长稳结论。
+
+## P3-S5-T04 验证状态
+
+2026-08-13 完成绑定提交 `e38390ee560fa0573b3aebf16ccc6fc225361400` 的 3600 秒软件
+preflight。正式 run ID 为 `20260812T153917Z_soak_preflight_e38390e_001`，runner 完整运行
+并有界收尾，全部证据通过 `sha256sum -c SHA256SUMS`，但最终
+`summary.status=FAIL`、`unclosed_failures=1`。
+
+唯一机器失败为 P1 `SOAK-001`：650 ms 延迟响应故障期间，非目标从站最大成功间隔 13.5 秒，
+超过冻结的 10 秒公平性门限。资源与性能门通过：正常成功率 100%、吞吐 26.201 requests/s、
+RSS 峰值 9.941 MiB、RSS 斜率 0.444 MiB/hour、CPU 平均 2.511%、fd 峰值 12、线程峰值 11；
+七类故障均触发并恢复。
+
+日志轮转通过，最大段 67,107,966 bytes，没有超过 64 MiB；但按末尾实测约 42,576.75 bytes/s
+线性外推，8 小时证据约 1.142 GiB，预计约 7.0 小时触碰 1 GiB 单次证据上限。必须先关闭公平性
+缺陷并形成版本化容量决策，再绑定新提交完整重跑 preflight。当前 S6 被阻塞。
+
+### T04 阻塞项修复状态
+
+2026-08-13 已完成候选修复：10 秒公平性门限保持不变；运行时新增 200 ms 有界晚响应隔离，
+丢弃字节后等待 RTU 3.5 字符静默再恢复调度；soak 摘要强制每个 delayed 循环出现
+`late_response_discarded`。新建 `software_release_v2` / `software_preflight_v2`，证据上限调整为
+5 GiB，启动/运行时磁盘余量调整为 10/5 GiB，v1 和首次 FAIL 证据保留。
+
+Debug、ASan/UBSan、Release、TSan 均为 182/182 PASS；clang-tidy 全目标完成，本次新增代码无
+新增诊断；clang-format、Python、JSON 和 v2 validate-only 通过。正式 v2 preflight 尚未绑定
+新提交运行，因此当前状态是“修复实现与质量门 PASS、最终 T04 待复跑”，S6 仍被阻塞。

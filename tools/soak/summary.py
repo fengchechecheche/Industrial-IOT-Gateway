@@ -287,6 +287,23 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
                 fault["expected_category"],
                 len(matching),
             )
+            if fault["kind"] == "delayed_response":
+                discarded = []
+                if occurrence is not None and occurrence["cleared_ms"] is not None:
+                    discarded = [
+                        item
+                        for item in gateway
+                        if item.get("event") == "late_response_discarded"
+                        and occurrence["started_ms"]
+                        <= float(item.get("monotonic_ms", 0))
+                        <= occurrence["cleared_ms"]
+                    ]
+                check(
+                    f"fault.{fault_id}.cycle_{cycle}.late_response_discarded",
+                    bool(discarded),
+                    ">= 1 quarantine discard event after response timeout",
+                    len(discarded),
+                )
 
     fairness_limit = float(request_thresholds["non_target_starvation_seconds_max"])
     fairness_gaps: list[float] = []
@@ -339,6 +356,8 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
             "requests_succeeded",
             "requests_failed",
             "response_timeouts",
+            "late_response_quarantines",
+            "late_response_bytes_discarded",
             "crc_errors",
             "truncated_frames",
             "remote_exceptions",
@@ -497,6 +516,12 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
         "latency_max_ms": latency_max if math.isfinite(latency_max) else None,
         "maximum_heartbeat_gap_seconds": maximum_heartbeat_gap,
         "maximum_non_target_gap_seconds": maximum_fairness_gap,
+        "late_response_quarantines": int(
+            final_statistics.get("late_response_quarantines", 0)
+        ),
+        "late_response_bytes_discarded": int(
+            final_statistics.get("late_response_bytes_discarded", 0)
+        ),
         "mqtt_message_count": len(mqtt_messages),
         "rss_peak_mib": rss_peak,
         "rss_slope_mib_per_hour": rss_slope,

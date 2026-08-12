@@ -39,6 +39,7 @@ struct GatewayRuntimeConfig {
   pipeline::RequestQueueConfig request_queue{};
   concurrency::QueueConfig measurement_queue{512U, 410U};
   std::chrono::milliseconds response_timeout{500};
+  std::chrono::milliseconds late_response_guard{200};
   std::chrono::milliseconds serial_reopen_backoff{200};
 };
 
@@ -53,6 +54,8 @@ struct GatewayRuntimeStatistics {
   std::uint64_t requests_succeeded{};
   std::uint64_t requests_failed{};
   std::uint64_t response_timeouts{};
+  std::uint64_t late_response_quarantines{};
+  std::uint64_t late_response_bytes_discarded{};
   std::uint64_t crc_errors{};
   std::uint64_t truncated_frames{};
   std::uint64_t remote_exceptions{};
