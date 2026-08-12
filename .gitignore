@@ -1,5 +1,7 @@
 /build/
 /artifacts/baseline/
+/artifacts/fault_matrix/
+/artifacts/soak/
 
 .cache/
 .clangd/
