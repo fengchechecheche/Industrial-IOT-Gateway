@@ -1,0 +1,126 @@
+{
+  "schema_version": "p3-s7-t01-release-gate-v1",
+  "generated_date": "2026-08-13",
+  "status": "APPROVED",
+  "repository": {
+    "local_name": "industrial_iot_gateway",
+    "remote_name": "Industrial-IOT-Gateway",
+    "candidate_revision": "4f207ebc9df354274ace1d87618efe47f1fe33fd",
+    "candidate_revision_confirmation": "CONFIRMED_BY_USER",
+    "s6_evidence_revision": "ecb4cacdf56e187940b341d647ff1529ca2f0b0c"
+  },
+  "approved_scope": {
+    "project_license": "MIT",
+    "license_copyright_line": "Copyright (c) 2026 fengchechecheche",
+    "release_version": "0.1.0",
+    "platform": "Linux x86_64 software MVP",
+    "raspberry_pi_validated": false,
+    "arm64_validated": false,
+    "real_rs485_validated": false,
+    "stm32_validated": false,
+    "can_validated": false
+  },
+  "software_decision": "ROUTE_TO_T02_MINIMAL_FIX",
+  "hardware_decision": "WAITING_FOR_HARDWARE",
+  "open_blockers": [
+    {
+      "id": "S7-RB-01",
+      "severity": "P0",
+      "title": "MIT decision is not yet materialized in LICENSE and README",
+      "route": "P3-S7-T02"
+    },
+    {
+      "id": "S7-RB-02",
+      "severity": "P1",
+      "title": "tools/demo.py pty-mqtt reproduction entry is missing",
+      "route": "P3-S7-T02"
+    },
+    {
+      "id": "S7-RB-03",
+      "severity": "P1",
+      "title": "Third-party release notices are not closed against package boundaries",
+      "route": "P3-S7-T02"
+    },
+    {
+      "id": "S7-RB-04",
+      "severity": "P1",
+      "title": "S6 systemd and install evidence is not strictly bound to the candidate commit",
+      "route": "P3-S7-T04"
+    },
+    {
+      "id": "S7-RB-05",
+      "severity": "P1",
+      "title": "Native Linux x86_64 systemd G5 evidence is missing",
+      "route": "P3-S7-T04"
+    },
+    {
+      "id": "S7-RB-06",
+      "severity": "P1",
+      "title": "Clean final-revision release rehearsal and bundle are not yet complete",
+      "route": "P3-S7-T04"
+    }
+  ],
+  "closed_scope_decisions": [
+    {
+      "id": "S7-RB-07",
+      "status": "CLOSED_DECISION",
+      "result": "MIT"
+    },
+    {
+      "id": "S7-RB-08",
+      "status": "CLOSED_BY_SCOPE",
+      "result": "ARM64 Raspberry Pi and real hardware do not block Linux x86_64 software MVP"
+    }
+  ],
+  "evidence_inheritance": {
+    "g1": "CONDITIONAL_INHERIT_AND_RERUN_FINAL",
+    "g2": "CONDITIONAL_INHERIT_WITH_NEW_DEMO_TEST",
+    "g3": "CONDITIONAL_INHERIT_AND_RERUN_REPRESENTATIVE_RECOVERY",
+    "g4_eight_hour_soak": "INHERIT_IF_T02_DOES_NOT_CHANGE_RUNTIME",
+    "g5_systemd": "DEVELOPMENT_EVIDENCE_ONLY_RERUN_NATIVE_LINUX",
+    "s6_rc_bundle": "DO_NOT_PROMOTE_REBUILD_FINAL"
+  },
+  "hardware_gates": [
+    {
+      "id": "HG-01",
+      "status": "PASS_WITH_LIMITS"
+    },
+    {
+      "id": "HG-02",
+      "status": "WAITING"
+    },
+    {
+      "id": "HG-03",
+      "status": "WAITING"
+    },
+    {
+      "id": "HG-04",
+      "status": "FAIL"
+    },
+    {
+      "id": "HG-05",
+      "status": "FAIL"
+    },
+    {
+      "id": "HG-06",
+      "status": "FAIL"
+    },
+    {
+      "id": "HG-07",
+      "status": "NOT_EVALUATED"
+    },
+    {
+      "id": "HG-08",
+      "status": "NOT_REQUIRED_FOR_V0.1.0"
+    }
+  ],
+  "next_actions": [
+    "Execute P3-S7-T02 minimal software blocker fixes",
+    "Execute P3-S7-T04 on the final revision including native Linux x86_64 systemd G5",
+    "Keep P3-S7-T03 disabled until all required hardware gates pass",
+    "Record G6 as NOT_RUN_OPTIONAL if hardware is still unavailable at stable release freeze"
+  ],
+  "formal_repository_sync": true,
+  "git_side_effects_performed": false,
+  "worktree_status_inspected": false
+}
