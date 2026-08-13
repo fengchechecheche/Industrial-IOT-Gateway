@@ -60,6 +60,10 @@ def run_process(
         timed_out = True
         termination_signal = _terminate_process_group(process, termination_grace_seconds)
         stdout, stderr = process.communicate()
+    except KeyboardInterrupt:
+        _terminate_process_group(process, termination_grace_seconds)
+        process.communicate()
+        raise
 
     duration_ms = int((time.monotonic() - started) * 1000)
     return ProcessResult(
@@ -71,4 +75,3 @@ def run_process(
         timed_out=timed_out,
         termination_signal=termination_signal,
     )
-

@@ -3,6 +3,19 @@ find_package(Threads REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 add_test(
+  NAME release_contract_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/release/test_release_contract.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(release_contract_unit PROPERTIES LABELS "unit;release" TIMEOUT 15)
+add_test(
+  NAME demo_cli_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/release/test_demo.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(demo_cli_unit PROPERTIES LABELS "unit;release;demo" TIMEOUT 20)
+
+add_test(
   NAME soak_profile_contract
   COMMAND "${Python3_EXECUTABLE}" -m unittest tests/soak/test_soak_profile.py
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

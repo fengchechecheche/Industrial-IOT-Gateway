@@ -161,3 +161,17 @@ install(
   FILES packaging/systemd/gateway.env.example
   DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/systemd
 )
+install(
+  FILES
+    config/examples/register_map.yaml
+    config/examples/pty_slave_scenarios.yaml
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/config
+)
+install(
+  FILES
+    LICENSE
+    THIRD_PARTY_NOTICES.md
+    README.md
+    docs/runbook.md
+  DESTINATION ${CMAKE_INSTALL_DOCDIR}
+)

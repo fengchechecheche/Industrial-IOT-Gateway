@@ -68,6 +68,22 @@ mosquitto -p 1883
 三个 MQTT 参数必须同时提供；省略整组参数时，即使二进制启用了 MQTT，也继续使用 JSONL
 发布器。`client_id` 采用不超过 23 字符的字母数字标识，`gateway_id` 允许下划线。
 
+## 一键软件演示
+
+Ubuntu 24.04 Linux x86_64 安装上述固定依赖后，可从仓库根目录执行：
+
+```bash
+python3 tools/demo.py --profile pty-mqtt
+```
+
+该命令自动配置 Release 构建、编译已有 MQTT+PTY 集成目标并运行一个回环 Mosquitto、三从站
+PTY、broker 断线/恢复和有界停止场景。成功输出包含 `DEMO_RESULT=PASS` 和
+`HARDWARE_VALIDATED=false`。
+
+这只是 Linux x86_64 上的软件集成演示，不代表树莓派、ARM64、systemd 稳定版门、真实
+USB-RS485、STM32、CAN 或 RS485 电气层已经验证。演示只清理由本次命令创建的进程，不会按
+进程名停止用户已有的 broker。
+
 Sanitizer 构建：
 
 ```bash
@@ -89,6 +105,9 @@ cmake --build build/release
 ctest --test-dir build/release --output-on-failure
 ```
 
-## 许可证状态
+## 许可证
 
-项目许可证尚未最终确定。MIT 只是在规划基线中获准保留的候选方案；在项目所有者确认前，不添加 `LICENSE` 文件。
+项目自有代码采用 [MIT License](LICENSE)，版权行是
+`Copyright (c) 2026 fengchechecheche`。第三方依赖保持各自许可证，详见
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和
+[docs/third_party_inventory.md](docs/third_party_inventory.md)。
