@@ -4,6 +4,7 @@
 /artifacts/soak/
 /artifacts/systemd/
 /artifacts/release/
+/artifacts/releases/
 
 .cache/
 .clangd/

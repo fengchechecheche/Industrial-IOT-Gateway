@@ -305,11 +305,32 @@ TEST(GatewayRuntimePtyTest, QuarantinesLateResponseWithoutPollutingNextTransacti
   const auto after = runtime.statistics();
   EXPECT_TRUE(after.stopped);
   EXPECT_EQ(after.serial_open_successes, 1U);
-  EXPECT_EQ(after.serial_errors, before.serial_errors);
+  EXPECT_EQ(after.serial_errors, before.serial_errors) << evidence.str();
   EXPECT_GT(after.late_response_quarantines, before.late_response_quarantines);
   EXPECT_GT(after.late_response_bytes_discarded, before.late_response_bytes_discarded);
   EXPECT_NE(evidence.str().find("late_response_quarantine_started"), std::string::npos);
   EXPECT_NE(evidence.str().find("late_response_discarded"), std::string::npos);
+}
+
+TEST(GatewayRuntimePtyTest, StopDuringInFlightRequestIsCancellationNotSerialFailure) {
+  PtyBusHarness bus(kRegisterMap, kScenarioMap);
+  ASSERT_TRUE(bus.start()) << bus.last_error();
+  ASSERT_TRUE(bus.set_fault(1U, FaultPlan{FaultMode::silent, 0U, 0U, 0U}));
+  std::ostringstream evidence;
+  auto config = runtime_config_for(bus.gateway_path());
+  config.response_timeout = std::chrono::milliseconds(500);
+  GatewayRuntime runtime(std::move(config), evidence);
+  ASSERT_TRUE(runtime.start());
+  ASSERT_TRUE(wait_until([&runtime] { return runtime.statistics().in_flight_requests == 1U; },
+                         std::chrono::seconds(2)))
+      << evidence.str();
+  const auto errors_before = runtime.statistics().serial_errors;
+  runtime.request_stop(ShutdownReason::service_stop);
+  runtime.join();
+  const auto after = runtime.statistics();
+  EXPECT_TRUE(after.stopped);
+  EXPECT_EQ(after.serial_errors, errors_before) << evidence.str();
+  EXPECT_NE(evidence.str().find("shutdown_cancelled"), std::string::npos);
 }
 
 TEST(GatewayRuntimePtyTest, EmitsStaleOfflineAndRecoversPolling) {

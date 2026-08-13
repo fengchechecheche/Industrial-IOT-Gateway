@@ -18,6 +18,7 @@ def main() -> int:
     arguments = parser.parse_args()
     output_root = ROOT / "artifacts/soak/ctest"
     shutil.rmtree(output_root, ignore_errors=True)
+    passed = False
     try:
         code, directory = run(
             repository_root=ROOT,
@@ -30,10 +31,15 @@ def main() -> int:
         )
         summary = json.loads((directory / "summary.json").read_text(encoding="utf-8"))
         if code != 0 or summary["status"] != "PASS" or summary["long_soak_pass"] is not False:
+            print(f"SOAK_SMOKE_RESULT=FAIL EVIDENCE={directory}")
+            print((directory / "failures.json").read_text(encoding="utf-8"))
             return 1
+        passed = True
+        print(f"SOAK_SMOKE_RESULT=PASS EVIDENCE={directory}")
         return 0
     finally:
-        shutil.rmtree(output_root, ignore_errors=True)
+        if passed:
+            shutil.rmtree(output_root, ignore_errors=True)
 
 
 if __name__ == "__main__":

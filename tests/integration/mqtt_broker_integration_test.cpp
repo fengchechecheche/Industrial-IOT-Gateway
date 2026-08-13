@@ -1,9 +1,12 @@
 #include "industrial_iot_gateway/mqtt/mqtt_config.hpp"
 #include "industrial_iot_gateway/mqtt/mqtt_publish_sink.hpp"
 
+#include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <csignal>
 #include <cstdint>
+#include <deque>
 #include <fcntl.h>
 #include <memory>
 #include <sstream>
@@ -13,8 +16,6 @@
 #include <unistd.h>
 
 #include <gtest/gtest.h>
-#include <mqtt/async_client.h>
-
 namespace {
 
 using industrial_iot_gateway::mqtt::MqttConfig;
@@ -26,6 +27,7 @@ using industrial_iot_gateway::quality::RegisterQuality;
 using namespace std::chrono_literals;
 
 const std::string kMosquitto = GATEWAY_MOSQUITTO_EXECUTABLE;
+const std::string kMosquittoSub = GATEWAY_MOSQUITTO_SUB_EXECUTABLE;
 
 template <typename Predicate>
 [[nodiscard]] bool wait_until(Predicate predicate, std::chrono::milliseconds timeout) {
@@ -99,41 +101,137 @@ private:
   pid_t child_{-1};
 };
 
-[[nodiscard]] ::mqtt::connect_options clean_session_options() {
-  ::mqtt::connect_options options{};
-  options.set_mqtt_version(MQTTVERSION_3_1_1);
-  options.set_clean_session(true);
-  options.set_connect_timeout(1);
-  return options;
-}
+class SubscriberProcess {
+public:
+  SubscriberProcess(std::uint16_t port, std::string client_id)
+      : port_(port), client_id_(std::move(client_id)) {}
+  ~SubscriberProcess() { stop(); }
+  SubscriberProcess(const SubscriberProcess &) = delete;
+  SubscriberProcess &operator=(const SubscriberProcess &) = delete;
 
-[[nodiscard]] bool connect_subscriber(::mqtt::async_client &client,
+  [[nodiscard]] bool start() {
+    if (child_ > 0 || read_fd_ >= 0) {
+      return false;
+    }
+    int pipe_fds[2]{};
+    if (::pipe2(pipe_fds, O_CLOEXEC) != 0) {
+      return false;
+    }
+    child_ = ::fork();
+    if (child_ < 0) {
+      static_cast<void>(::close(pipe_fds[0]));
+      static_cast<void>(::close(pipe_fds[1]));
+      return false;
+    }
+    if (child_ == 0) {
+      static_cast<void>(::close(pipe_fds[0]));
+      static_cast<void>(::dup2(pipe_fds[1], STDOUT_FILENO));
+      static_cast<void>(::close(pipe_fds[1]));
+      const auto null_fd = ::open("/dev/null", O_WRONLY | O_CLOEXEC);
+      if (null_fd >= 0) {
+        static_cast<void>(::dup2(null_fd, STDERR_FILENO));
+        static_cast<void>(::close(null_fd));
+      }
+      const auto port = std::to_string(port_);
+      ::execl(kMosquittoSub.c_str(), kMosquittoSub.c_str(), "-h", "127.0.0.1", "-p", port.c_str(),
+              "-t", "industrial_iot_gateway/#", "-q", "1", "-v", "-i", client_id_.c_str(),
+              static_cast<char *>(nullptr));
+      ::_exit(127);
+    }
+    static_cast<void>(::close(pipe_fds[1]));
+    read_fd_ = pipe_fds[0];
+    const auto flags = ::fcntl(read_fd_, F_GETFL, 0);
+    if (flags < 0 || ::fcntl(read_fd_, F_SETFL, flags | O_NONBLOCK) != 0) {
+      stop();
+      return false;
+    }
+    std::this_thread::sleep_for(150ms);
+    int status{};
+    if (::waitpid(child_, &status, WNOHANG) == child_) {
+      child_ = -1;
+      static_cast<void>(::close(read_fd_));
+      read_fd_ = -1;
+      return false;
+    }
+    return true;
+  }
+
+  [[nodiscard]] bool consume_matching(const std::string &topic, const std::string &payload_marker,
                                       std::chrono::milliseconds timeout) {
-  return wait_until(
-      [&client] {
-        try {
-          auto token = client.connect(clean_session_options());
-          return token->wait_for(1s) && client.is_connected();
-        } catch (const ::mqtt::exception &) {
-          return false;
-        }
-      },
-      timeout);
-}
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+      drain_messages();
+      const auto match = std::find_if(messages_.begin(), messages_.end(), [&](const auto &message) {
+        return message.first == topic && message.second.find(payload_marker) != std::string::npos;
+      });
+      if (match != messages_.end()) {
+        messages_.erase(match);
+        return true;
+      }
+      std::this_thread::sleep_for(20ms);
+    }
+    drain_messages();
+    return std::any_of(messages_.begin(), messages_.end(), [&](const auto &message) {
+      return message.first == topic && message.second.find(payload_marker) != std::string::npos;
+    });
+  }
 
-[[nodiscard]] bool consume_matching(::mqtt::async_client &client, const std::string &topic,
-                                    const std::string &payload_marker,
-                                    std::chrono::milliseconds timeout) {
-  const auto deadline = std::chrono::steady_clock::now() + timeout;
-  while (std::chrono::steady_clock::now() < deadline) {
-    const auto message = client.try_consume_message_for(100ms);
-    if (message != nullptr && message->get_topic() == topic &&
-        message->to_string().find(payload_marker) != std::string::npos) {
-      return true;
+  void stop() noexcept {
+    if (child_ > 0) {
+      static_cast<void>(::kill(child_, SIGTERM));
+      const auto deadline = std::chrono::steady_clock::now() + 2s;
+      int status{};
+      while (std::chrono::steady_clock::now() < deadline) {
+        if (::waitpid(child_, &status, WNOHANG) == child_) {
+          child_ = -1;
+          break;
+        }
+        std::this_thread::sleep_for(20ms);
+      }
+      if (child_ > 0) {
+        static_cast<void>(::kill(child_, SIGKILL));
+        static_cast<void>(::waitpid(child_, &status, 0));
+        child_ = -1;
+      }
+    }
+    if (read_fd_ >= 0) {
+      static_cast<void>(::close(read_fd_));
+      read_fd_ = -1;
     }
   }
-  return false;
-}
+
+private:
+  void drain_messages() {
+    char bytes[4096]{};
+    while (read_fd_ >= 0) {
+      const auto count = ::read(read_fd_, bytes, sizeof(bytes));
+      if (count > 0) {
+        buffer_.append(bytes, static_cast<std::size_t>(count));
+        continue;
+      }
+      if (count < 0 && errno == EINTR) {
+        continue;
+      }
+      break;
+    }
+    std::size_t newline{};
+    while ((newline = buffer_.find('\n')) != std::string::npos) {
+      auto line = buffer_.substr(0U, newline);
+      buffer_.erase(0U, newline + 1U);
+      const auto separator = line.find(' ');
+      if (separator != std::string::npos) {
+        messages_.emplace_back(line.substr(0U, separator), line.substr(separator + 1U));
+      }
+    }
+  }
+
+  std::uint16_t port_{};
+  std::string client_id_{};
+  pid_t child_{-1};
+  int read_fd_{-1};
+  std::string buffer_{};
+  std::deque<std::pair<std::string, std::string>> messages_{};
+};
 
 [[nodiscard]] TelemetryEvent telemetry(RegisterQuality quality, std::string reason,
                                        std::chrono::steady_clock::time_point deadline) {
@@ -178,20 +276,15 @@ TEST(MqttBrokerIntegrationTest, ReconnectsDrainsCriticalStateAndDropsExpiredFres
   ASSERT_TRUE(wait_until([&sink] { return sink.statistics().connected_events >= 1U; }, 3s))
       << events.str();
 
-  ::mqtt::token_ptr first_disconnect{};
-  ::mqtt::async_client first_subscriber(broker_uri, "observera" + std::to_string(::getpid()));
-  first_subscriber.start_consuming();
-  ASSERT_TRUE(connect_subscriber(first_subscriber, 2s));
-  ASSERT_TRUE(first_subscriber.subscribe("industrial_iot_gateway/#", 1)->wait_for(1s));
+  SubscriberProcess first_observer(port, "observera" + std::to_string(::getpid()));
+  ASSERT_TRUE(first_observer.start());
   const auto initial =
       telemetry(RegisterQuality::fresh, "valid_sample", std::chrono::steady_clock::now() + 2s);
   const auto topic = initial.topic;
   EXPECT_EQ(sink.submit(PublishMessage{initial}),
             industrial_iot_gateway::concurrency::QueuePushStatus::accepted);
-  EXPECT_TRUE(consume_matching(first_subscriber, topic, "\"quality\":\"fresh\"", 2s));
-  first_disconnect = first_subscriber.disconnect();
-  static_cast<void>(first_disconnect->wait_for(1s));
-  first_subscriber.stop_consuming();
+  EXPECT_TRUE(first_observer.consume_matching(topic, "\"quality\":\"fresh\"", 2s));
+  first_observer.stop();
 
   broker.stop();
   ASSERT_TRUE(wait_until([&sink] { return sink.statistics().disconnected_events >= 1U; }, 3s));
@@ -217,17 +310,13 @@ TEST(MqttBrokerIntegrationTest, ReconnectsDrainsCriticalStateAndDropsExpiredFres
   std::this_thread::sleep_for(200ms);
 
   ASSERT_TRUE(broker.start());
-  ::mqtt::token_ptr second_disconnect{};
-  ::mqtt::async_client second_subscriber(broker_uri, "observerb" + std::to_string(::getpid()));
-  second_subscriber.start_consuming();
-  ASSERT_TRUE(connect_subscriber(second_subscriber, 2s));
-  ASSERT_TRUE(second_subscriber.subscribe("industrial_iot_gateway/#", 1)->wait_for(1s));
+  SubscriberProcess second_observer(port, "observerb" + std::to_string(::getpid()));
+  ASSERT_TRUE(second_observer.start());
   ASSERT_TRUE(wait_until([&sink] { return sink.statistics().connected_events >= 2U; }, 4s))
       << events.str();
-  EXPECT_TRUE(consume_matching(second_subscriber, topic, "\"quality\":\"stale\"", 2s));
-  EXPECT_TRUE(consume_matching(second_subscriber,
-                               "industrial_iot_gateway/devices/environment_sensor/status",
-                               "\"state\":\"offline\"", 2s));
+  EXPECT_TRUE(second_observer.consume_matching(topic, "\"quality\":\"stale\"", 2s));
+  EXPECT_TRUE(second_observer.consume_matching(
+      "industrial_iot_gateway/devices/environment_sensor/status", "\"state\":\"offline\"", 2s));
 
   const auto shutdown_started = std::chrono::steady_clock::now();
   sink.request_stop(shutdown_started + 2s);
@@ -241,9 +330,7 @@ TEST(MqttBrokerIntegrationTest, ReconnectsDrainsCriticalStateAndDropsExpiredFres
   EXPECT_GE(statistics.expired_fresh_dropped, 1U);
   EXPECT_EQ(statistics.critical_enqueue_failures, 0U);
   EXPECT_EQ(statistics.drain_expired, 0U);
-  second_disconnect = second_subscriber.disconnect();
-  static_cast<void>(second_disconnect->wait_for(1s));
-  second_subscriber.stop_consuming();
+  second_observer.stop();
 }
 
 } // namespace

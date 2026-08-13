@@ -588,6 +588,9 @@ private:
     const auto sent_at = RuntimeClock::now();
     const auto deadline = std::min(request.deadline, sent_at + config.response_timeout);
     if (!write_request(serial, adu, deadline)) {
+      if (stop_requested.load()) {
+        return {scheduler::RequestResultCategory::shutdown_cancelled, std::nullopt, std::nullopt};
+      }
       bool closed_serial{};
       if (serial.is_open()) {
         serial.close();
@@ -611,6 +614,9 @@ private:
           statistics_value.maximum_in_flight_requests, statistics_value.in_flight_requests);
     }
     auto outcome = receive_response(serial, request, deadline);
+    if (stop_requested.load()) {
+      outcome = {scheduler::RequestResultCategory::shutdown_cancelled, std::nullopt, std::nullopt};
+    }
     if (!outcome.requires_serial_reopen &&
         (outcome.category == scheduler::RequestResultCategory::response_timeout ||
          outcome.category == scheduler::RequestResultCategory::truncated_frame)) {

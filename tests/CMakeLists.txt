@@ -14,6 +14,26 @@ add_test(
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
 set_tests_properties(demo_cli_unit PROPERTIES LABELS "unit;release;demo" TIMEOUT 20)
+add_test(
+  NAME release_manifest_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/release/test_release_manifest.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(release_manifest_unit PROPERTIES LABELS "unit;release" TIMEOUT 20)
+add_test(
+  NAME release_runner_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/release/test_release_runner.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(release_runner_unit PROPERTIES LABELS "unit;release" TIMEOUT 20)
+add_test(
+  NAME release_systemd_runner_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/release/test_systemd_runner.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  release_systemd_runner_unit PROPERTIES LABELS "unit;release;system" TIMEOUT 20
+)
 
 add_test(
   NAME soak_profile_contract
@@ -208,6 +228,7 @@ gateway_enable_clang_tidy(gateway_mqtt_policy_test)
 
 if(GATEWAY_ENABLE_MQTT)
   find_program(GATEWAY_MOSQUITTO_EXECUTABLE NAMES mosquitto REQUIRED)
+  find_program(GATEWAY_MOSQUITTO_SUB_EXECUTABLE NAMES mosquitto_sub REQUIRED)
   add_executable(
     gateway_mqtt_unit_test
     unit/mqtt_payload_serializer_test.cpp
@@ -239,7 +260,9 @@ if(GATEWAY_ENABLE_MQTT)
   )
   target_compile_definitions(
     gateway_mqtt_broker_integration_test
-    PRIVATE GATEWAY_MOSQUITTO_EXECUTABLE="${GATEWAY_MOSQUITTO_EXECUTABLE}"
+    PRIVATE
+      GATEWAY_MOSQUITTO_EXECUTABLE="${GATEWAY_MOSQUITTO_EXECUTABLE}"
+      GATEWAY_MOSQUITTO_SUB_EXECUTABLE="${GATEWAY_MOSQUITTO_SUB_EXECUTABLE}"
   )
   gateway_enable_clang_tidy(gateway_mqtt_broker_integration_test)
 endif()

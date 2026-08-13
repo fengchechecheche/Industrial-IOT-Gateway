@@ -234,7 +234,11 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
             return False
         return not any(start <= elapsed <= end for start, end in exclusion_windows)
 
-    normal = [item for item in request_events if is_normal(item)]
+    normal = [
+        item
+        for item in request_events
+        if is_normal(item) and item.get("result") != "shutdown_cancelled"
+    ]
     normal_success = [item for item in normal if item.get("result") == "success"]
     success_rate = len(normal_success) / len(normal) if normal else 0.0
     excluded = sum(max(0.0, min(float(profile["duration_seconds"]), end) - max(float(profile["warmup_seconds"]), start)) for start, end in exclusion_windows)
@@ -254,6 +258,7 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
     known_results = {
         "success", "response_timeout", "crc_mismatch", "truncated_frame", "remote_exception",
         "serial_io_transient", "invalid_configuration", "broadcast_unsupported",
+        "shutdown_cancelled",
     }
     unclassified = sum(1 for item in request_events if item.get("result") not in known_results)
     check("requests.unclassified_errors", unclassified <= request_thresholds["unclassified_errors_max"], request_thresholds["unclassified_errors_max"], unclassified)

@@ -132,6 +132,41 @@ class SoakSummaryUnitTest(unittest.TestCase):
             self.assertEqual(summary["status"], "PASS")
             self.assertFalse(summary["long_soak_pass"])
 
+    def test_shutdown_cancellation_is_known_and_excluded_from_performance(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            self.make_evidence(directory)
+            gateway_path = directory / "gateway_0001.jsonl"
+            gateway = [json.loads(line) for line in gateway_path.read_text().splitlines()]
+            gateway.extend(
+                [
+                    {
+                        "event": "request_completed",
+                        "monotonic_ms": 90500,
+                        "slave_id": 1,
+                        "result": "success",
+                        "duration_ms": 1,
+                    },
+                    {
+                        "event": "request_completed",
+                        "monotonic_ms": 90700,
+                        "slave_id": 2,
+                        "result": "shutdown_cancelled",
+                        "duration_ms": 1,
+                    },
+                ]
+            )
+            gateway_path.write_text(
+                "".join(json.dumps(item) + "\n" for item in gateway), encoding="utf-8"
+            )
+
+            summary = summarize(directory)
+            oracles = {item["oracle_id"]: item for item in summary["oracles"]}
+
+            self.assertEqual(oracles["requests.unclassified_errors"]["actual"], 0)
+            self.assertEqual(oracles["requests.normal_success_rate"]["actual"], 1.0)
+            self.assertEqual(summary["status"], "PASS")
+
     def test_failed_stop_flag_returns_non_pass(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             directory = pathlib.Path(temporary)
