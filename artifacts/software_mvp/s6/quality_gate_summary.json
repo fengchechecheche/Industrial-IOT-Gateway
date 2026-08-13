@@ -1,0 +1,37 @@
+{
+  "schema_version": "p3-s6-quality-gate-v1",
+  "status": "PASS",
+  "source_revision": "ecb4cacdf56e187940b341d647ff1529ca2f0b0c",
+  "software_soak": {
+    "profile": "software_release_v2",
+    "run_id": "20260812T184831Z_soak_release_ecb4cac_001",
+    "duration_seconds": 28800.055,
+    "long_soak_pass": true,
+    "oracles_passed": 212,
+    "oracles_total": 212,
+    "unclosed_failures": 0
+  },
+  "systemd": {
+    "run_id": "20260813T033000Z_systemd_acceptance_ecb4cac_003",
+    "environment": "WSL2 Ubuntu 24.04 x86_64 systemd 255",
+    "status": "PASS",
+    "target_linux_arm64_validated": false
+  },
+  "quality_gates": {
+    "release_ctest": "182/182 PASS",
+    "debug_ctest": "182/182 PASS",
+    "asan_ubsan_ctest": "182/182 PASS",
+    "tsan_ctest": "182/182 PASS",
+    "clang_tidy_18": "PASS with documented existing warnings",
+    "clang_format_18": "82/82 PASS",
+    "python_compile": "21/21 PASS",
+    "json_parse": "8/8 PASS",
+    "systemd_contract": "5/5 PASS"
+  },
+  "release_candidate": {
+    "name": "industrial_iot_gateway-0.1.0-linux-x86_64-rc1",
+    "local_bundle_sha256_verified": true,
+    "target_linux_arm64_validated": false,
+    "hardware_validated": false
+  }
+}

@@ -156,8 +156,7 @@ profile/evidence schema、`/proc` 资源采样和分段日志；没有安装额�
 | 90 秒 soak smoke | PASS | 4/4 soak CTest；七类故障均触发和恢复 |
 
 最终 smoke 只验证执行工具、逐循环 oracle、资源采样、broker 断线、PTY 重连、日志轮转和有界
-清理，`long_soak_pass=false`。T04 后续已经执行但结论为 FAIL；S6 的 28800 秒 release 尚未
-执行，因此当前没有软件长稳 PASS、树莓派部署或硬件长稳结论。
+清理，`long_soak_pass=false`。后续 v2 preflight 和 S6 28800 秒 release 已绑定新提交并 PASS；树莓派 ARM64、真实 RS485 与硬件长稳仍未执行。
 
 ## P3-S5-T04 验证状态
 
@@ -173,7 +172,7 @@ RSS 峰值 9.941 MiB、RSS 斜率 0.444 MiB/hour、CPU 平均 2.511%、fd 峰值
 
 日志轮转通过，最大段 67,107,966 bytes，没有超过 64 MiB；但按末尾实测约 42,576.75 bytes/s
 线性外推，8 小时证据约 1.142 GiB，预计约 7.0 小时触碰 1 GiB 单次证据上限。必须先关闭公平性
-缺陷并形成版本化容量决策，再绑定新提交完整重跑 preflight。当前 S6 被阻塞。
+缺陷并形成版本化容量决策，再绑定新提交完整重跑 preflight。此处保留首次 FAIL 历史结论。
 
 ### T04 阻塞项修复状态
 
@@ -183,5 +182,28 @@ RSS 峰值 9.941 MiB、RSS 斜率 0.444 MiB/hour、CPU 平均 2.511%、fd 峰值
 5 GiB，启动/运行时磁盘余量调整为 10/5 GiB，v1 和首次 FAIL 证据保留。
 
 Debug、ASan/UBSan、Release、TSan 均为 182/182 PASS；clang-tidy 全目标完成，本次新增代码无
-新增诊断；clang-format、Python、JSON 和 v2 validate-only 通过。正式 v2 preflight 尚未绑定
-新提交运行，因此当前状态是“修复实现与质量门 PASS、最终 T04 待复跑”，S6 仍被阻塞。
+新增诊断；clang-format、Python、JSON 和 v2 validate-only 通过。
+
+2026-08-13，绑定提交 `ecb4cacdf56e187940b341d647ff1529ca2f0b0c` 的正式 v2 preflight
+完整运行 3600.035 秒并 PASS；run ID 为
+`20260812T174640Z_soak_preflight_ecb4cac_001`。公平性最大间隔 2.991 秒，延迟响应隔离
+oracle、七类故障、资源、队列、MQTT、证据容量和 SHA-256 全部通过，T04 阻塞解除。
+
+## P3-S6 验证状态
+
+相同提交和 Release driver 使用 `software_release_v2` 完成连续 28800.055 秒正式长稳。run ID：
+`20260812T184831Z_soak_release_ecb4cac_001`；`summary.status=PASS`、
+`long_soak_pass=true`、未关闭失败 0、212/212 oracle PASS。
+
+正常成功率 99.9685%、吞吐 26.2005 requests/s、P95/P99/最大延迟 0/0/20 ms；公平性最大
+间隔 2.998 秒。RSS 峰值 9.902 MiB、斜率 0.0404 MiB/hour、首末稳态差 0.430 MiB；fd 和
+线程稳态漂移均为 0。证据目录 511,325,274 bytes，SHA-256 复核通过。
+
+systemd 最终矩阵 `20260813T033000Z_systemd_acceptance_ecb4cac_003` 在 WSL2 systemd 255
+环境 PASS：非 root、静态 verify、SIGTERM、有界停止、错误配置不重启、串口缺失有界退避、
+broker 不可达时串口继续、SIGKILL 自动重启和三轮无残留启停均通过。该证据属于开发环境，
+不替代 Raspberry Pi ARM64/真实串口复验。
+
+候选 Release 最终质量门：Release、Debug、ASan/UBSan、TSan 均为 182/182 PASS；clang-tidy
+18 全目标构建完成，clang-format 82 文件、Python 21 文件、JSON 8 文件和 systemd 合同 5/5
+全部通过。x86_64 RC bundle 已在本地忽略的 `artifacts/release/s6/` 生成并校验 SHA-256。

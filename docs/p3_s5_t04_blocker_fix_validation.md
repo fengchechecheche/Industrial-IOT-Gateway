@@ -2,7 +2,7 @@
 
 > 验收日期：2026-08-13  
 > 范围：晚响应跨事务污染修复、10 秒公平性门限保留、5 GiB v2 证据预算  
-> 当前结论：**实现与质量门 PASS；绑定新提交的 3600 秒 preflight 待执行**
+> 当前结论：**最终 PASS；绑定新提交的 3600 秒 v2 preflight 已完成**
 
 ## 1. 结论
 
@@ -17,8 +17,10 @@
 Debug、ASan/UBSan、Release 和 TSan 均完成 182/182 CTest；clang-tidy 全目标构建完成，本次
 新增代码没有新增诊断；全项目 clang-format、Python、JSON 和 v2 validate-only 通过。
 
-当前不能把本报告写成 T04 最终 PASS：正式 preflight 必须绑定用户提交后的新 SHA，完整运行
-3600 秒并得到 `summary.status=PASS`。在此之前 S6 仍被阻塞。
+随后绑定提交 `ecb4cacdf56e187940b341d647ff1529ca2f0b0c` 完整运行 3600.035 秒正式
+v2 preflight。run ID 为 `20260812T174640Z_soak_preflight_ecb4cac_001`；
+`summary.status=PASS`、未关闭失败 0，SHA-256 复核通过。公平性最大间隔 2.991 秒，所有 delayed
+循环均有 timeout 与晚响应丢弃证据。T04 最终 PASS，S6 软件长稳门解除。
 
 ## 2. 旧失败根因验证
 
@@ -137,13 +139,18 @@ v1，也没有用新门限改写首次 FAIL。
 | Python `py_compile` 与 JSON parse | PASS |
 | `software_preflight_v2` validate-only | PASS，`PROFILE_VALID=software_preflight_v2` |
 
-## 7. 待完成验收
+## 7. 正式 v2 复验结果
 
-1. 用户提交当前实现并提供新提交 ID；
-2. 以 Release driver、`software_preflight_v2.json` 和新 SHA 执行 3600 秒正式 preflight；
-3. 公平性仍必须 ≤10 秒；
-4. 每个 delayed 故障循环必须包含 timeout 和 `late_response_discarded`；
-5. 证据、资源、队列、MQTT、七类故障和 SHA-256 全部门继续 PASS；
-6. 只有 `summary.status=PASS`、`unclosed_failures=0` 后，才更新最终 T04 状态并解除 S6 阻塞。
+| 项目 | 正式结果 |
+|---|---|
+| 提交 | `ecb4cacdf56e187940b341d647ff1529ca2f0b0c` |
+| run ID | `20260812T174640Z_soak_preflight_ecb4cac_001` |
+| 时长 | 3600.035 秒 |
+| 摘要 | PASS，未关闭失败 0，`long_soak_pass=false`（preflight 正确语义） |
+| 公平性 | 最大 2.991 秒，门限 10 秒 |
+| 晚响应 | 丢弃 95 bytes，隔离 37 次，强制 oracle PASS |
+| 性能 | 正常成功率 100%，吞吐 26.205 requests/s |
+| 资源 | RSS 峰值 9.645 MiB，斜率 0.222 MiB/hour |
+| 证据 | 152,232,879 bytes；`SHA256SUMS` PASS；`failures.json=[]` |
 
 本阶段没有检查 Git 工作区状态，也没有执行 `git add`、`git commit` 或 `git push`。

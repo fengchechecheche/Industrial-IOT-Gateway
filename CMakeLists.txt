@@ -12,6 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(CTest)
+include(GNUInstallDirs)
 
 option(GATEWAY_BUILD_TESTS "Build project tests" "${BUILD_TESTING}")
 option(GATEWAY_BUILD_PTY_SLAVE "Build the PTY Modbus slave simulator" OFF)
@@ -150,3 +151,13 @@ if(GATEWAY_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
 endif()
+
+install(TARGETS gateway_app RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(
+  FILES packaging/systemd/industrial_iot_gateway.service
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/systemd/system
+)
+install(
+  FILES packaging/systemd/gateway.env.example
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/systemd
+)

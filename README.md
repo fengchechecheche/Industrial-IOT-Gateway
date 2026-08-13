@@ -11,9 +11,12 @@
 - 三从站 PTY 软件仿真和结构化 JSONL 证据；
 - MQTT 3.1.1 QoS 1 上行、异步发布、有界缓存、按 topic 合并、重连、LWT 和指标；
 - MQTT 可通过 `GATEWAY_ENABLE_MQTT` 独立关闭，关闭时保留原有 JSONL/PTY 路径。
+- 绑定冻结提交的 8 小时软件长稳、周期故障、资源趋势和 SHA-256 自动验收；
+- 非 root systemd unit、错误配置 fail-fast、串口缺失退避、异常重启和 CMake 安装暂存。
 
-当前不包含 MQTT 下行写寄存器、TLS/生产凭据、systemd、ARM64、真实 USB-RS485/STM32
-硬件验收或 S4 故障注入 runner。
+当前不包含 MQTT 下行写寄存器、TLS/生产凭据、ARM64/树莓派、真实 USB-RS485/STM32
+硬件验收或生产发行结论。WSL2 systemd 与 PTY 软件证据不能替代目标机和电气层复验。
+部署与排障命令见 `docs/runbook.md`。
 
 ## 构建与测试
 

@@ -2,7 +2,7 @@
 
 > 合同版本：1.0.0  
 > 适用工作块：P3-S5-T03 及其后续 T04/S6 软件长稳执行  
-> 当前状态：合同与工具已实现；3600 秒预跑已执行并 FAIL；28800 秒正式长稳被阻塞
+> 当前状态：v1 首次预跑 FAIL 已保留；v2 3600 秒预跑与 28800 秒正式长稳均 PASS
 
 ## 1. 目的与结论边界
 
@@ -132,5 +132,27 @@ python3 tools/summarize_soak.py artifacts/soak/<kind>/<run_id>
 - 启动/运行时剩余磁盘门限为 10/5 GiB；
 - 单日志段仍为 64 MiB。
 
-候选实现已通过四套 182/182 CTest、clang-tidy 全目标和格式检查。它必须绑定用户确认的新提交
-完整重跑 3600 秒；只有新运行 `summary.status=PASS` 才能把 v2 升为当前正式合同并解除 S6 阻塞。
+候选实现先通过四套 182/182 CTest、clang-tidy 全目标和格式检查，随后绑定提交
+`ecb4cacdf56e187940b341d647ff1529ca2f0b0c` 完整执行正式复验。
+
+## 10. v2 正式 preflight 结果
+
+run ID `20260812T174640Z_soak_preflight_ecb4cac_001` 完整运行 3600.035 秒，
+`summary.status=PASS`、未关闭失败 0。非目标从站最大成功间隔 2.991 秒；晚响应字节丢弃 95、
+隔离 37 次；正常成功率 100%、吞吐 26.205 requests/s；RSS 峰值 9.645 MiB、斜率
+0.222 MiB/hour。证据 152,232,879 bytes，SHA-256 复核通过。v2 因此升为当前正式合同并解除
+S6 软件门阻塞。
+
+## 11. S6 正式 release 结果
+
+run ID `20260812T184831Z_soak_release_ecb4cac_001` 使用同一 Release driver 和冻结配置连续运行
+28800.055 秒：
+
+- `summary.status=PASS`、`long_soak_pass=true`、未关闭失败 0；
+- 八个循环的 56 个故障窗口全部触发并恢复，212/212 oracle PASS；
+- 正常成功率 99.9685%、吞吐 26.2005 requests/s，公平性最大间隔 2.998 秒；
+- RSS 峰值 9.902 MiB、斜率 0.0404 MiB/hour，fd/线程稳态漂移均为 0；
+- 关闭 4 ms，证据 511,325,274 bytes，SHA-256 复核通过。
+
+该结果建立 WSL2 x86_64 软件长稳结论，不建立树莓派、USB-RS485、STM32、传感器或生产
+MQTT 网络的硬件/部署结论。

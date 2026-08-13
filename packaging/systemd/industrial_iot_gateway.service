@@ -1,0 +1,45 @@
+[Unit]
+Description=Industrial IoT Gateway
+Documentation=https://github.com/fengchechecheche/Industrial-IOT-Gateway
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=iot-gw
+Group=iot-gw
+SupplementaryGroups=dialout
+WorkingDirectory=/var/lib/industrial_iot_gateway
+StateDirectory=industrial_iot_gateway
+StateDirectoryMode=0750
+EnvironmentFile=/etc/industrial_iot_gateway/gateway.env
+ExecStart=/usr/local/bin/gateway_app --serial-device ${GATEWAY_SERIAL_DEVICE} --register-map ${GATEWAY_REGISTER_MAP} $GATEWAY_MQTT_ARGS
+Restart=on-failure
+RestartSec=2s
+RestartPreventExitStatus=2 3 4 5 6 7
+TimeoutStopSec=5s
+KillSignal=SIGTERM
+SendSIGKILL=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=industrial_iot_gateway
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
