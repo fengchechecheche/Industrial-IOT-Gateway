@@ -333,6 +333,62 @@ TEST(GatewayRuntimePtyTest, StopDuringInFlightRequestIsCancellationNotSerialFail
   EXPECT_NE(evidence.str().find("shutdown_cancelled"), std::string::npos);
 }
 
+TEST(GatewayRuntimePtyTest, ClearsStaleSlaveResponsesAcrossPtyReconnect) {
+  PtyBusHarness bus(kRegisterMap, kScenarioMap);
+  ASSERT_TRUE(bus.start()) << bus.last_error();
+  std::ostringstream evidence;
+  auto config = runtime_config_for(bus.gateway_path());
+  config.response_timeout = std::chrono::milliseconds(500);
+  config.late_response_guard = std::chrono::milliseconds(50);
+  GatewayRuntime runtime(std::move(config), evidence);
+  ASSERT_TRUE(runtime.valid());
+  ASSERT_TRUE(runtime.start());
+
+  ASSERT_TRUE(wait_until([&runtime] { return runtime.statistics().requests_succeeded >= 20U; },
+                         std::chrono::seconds(3)))
+      << evidence.str();
+  for (std::size_t cycle = 0; cycle < 8U; ++cycle) {
+    ASSERT_TRUE(bus.set_fault(2U, FaultPlan{FaultMode::delayed_response, 650U, 2U, 2U}));
+    const auto attempts_before_delayed_request = runtime.statistics().slaves[2].attempts_sent;
+    ASSERT_TRUE(wait_until(
+        [&runtime, attempts_before_delayed_request] {
+          return runtime.statistics().slaves[2].attempts_sent > attempts_before_delayed_request;
+        },
+        std::chrono::seconds(2)))
+        << "cycle=" << cycle << '\n'
+        << evidence.str();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    ASSERT_TRUE(bus.disconnect_and_reconnect(std::chrono::milliseconds(800)))
+        << "cycle=" << cycle << ": " << bus.last_error();
+    ASSERT_TRUE(bus.set_fault(2U, FaultPlan{}));
+
+    const auto before_recovery = runtime.statistics();
+    ASSERT_TRUE(wait_until(
+        [&runtime, &before_recovery] {
+          const auto statistics = runtime.statistics();
+          return statistics.slaves[1].requests_succeeded >
+                     before_recovery.slaves[1].requests_succeeded &&
+                 statistics.slaves[2].requests_succeeded >
+                     before_recovery.slaves[2].requests_succeeded &&
+                 statistics.slaves[3].requests_succeeded >
+                     before_recovery.slaves[3].requests_succeeded;
+        },
+        std::chrono::seconds(6)))
+        << "cycle=" << cycle << '\n'
+        << evidence.str();
+    const auto errors_after_all_slaves_recovered = runtime.statistics().serial_errors;
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    EXPECT_EQ(runtime.statistics().serial_errors, errors_after_all_slaves_recovered)
+        << "cycle=" << cycle
+        << ": stale slave response survived PTY reconnect and polluted later requests\n"
+        << evidence.str();
+  }
+
+  runtime.request_stop(ShutdownReason::service_stop);
+  runtime.join();
+  EXPECT_TRUE(runtime.statistics().stopped);
+}
+
 TEST(GatewayRuntimePtyTest, EmitsStaleOfflineAndRecoversPolling) {
   PtyBusHarness bus(kRegisterMap, kScenarioMap);
   ASSERT_TRUE(bus.start()) << bus.last_error();

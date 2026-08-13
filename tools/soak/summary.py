@@ -160,6 +160,7 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
                     "started_ms": float(item["monotonic_ms"]),
                     "cleared_ms": None,
                     "recovered": False,
+                    "recovery_details": None,
                 }
             )
         elif item.get("event") == "fault_cleared" and isinstance(fault_id, str):
@@ -170,6 +171,7 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
             occurrences = driver_fault_occurrences.get(fault_id, [])
             if occurrences:
                 occurrences[-1]["recovered"] = True
+                occurrences[-1]["recovery_details"] = item
 
     runner_fault_occurrences: dict[str, dict[int, set[str]]] = {}
     for item in runner_events:
@@ -201,6 +203,27 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
                     True,
                     bool(occurrence and occurrence["recovered"]),
                 )
+                if fault["kind"] == "pty_disconnect":
+                    recovery_details = (
+                        occurrence.get("recovery_details") if occurrence is not None else None
+                    )
+                    recovered_slaves = (
+                        recovery_details.get("slaves", [])
+                        if isinstance(recovery_details, dict)
+                        else []
+                    )
+                    all_slaves_recovered = (
+                        len(recovered_slaves) == 3
+                        and {slave.get("slave_id") for slave in recovered_slaves} == {1, 2, 3}
+                        and all(slave.get("recovered") is True for slave in recovered_slaves)
+                        and recovery_details.get("all_slaves_recovered") is True
+                    )
+                    check(
+                        f"{oracle_prefix}.all_slaves_recovered",
+                        all_slaves_recovered,
+                        True,
+                        all_slaves_recovered,
+                    )
             else:
                 observed = runner_fault_occurrences.get(fault_id, {}).get(cycle, set())
                 check(
@@ -234,10 +257,26 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
             return False
         return not any(start <= elapsed <= end for start, end in exclusion_windows)
 
-    normal = [
+    normal_attempts = [
         item
         for item in request_events
         if is_normal(item) and item.get("result") != "shutdown_cancelled"
+    ]
+    logical_attempts: dict[tuple[str, object], list[dict[str, Any]]] = {}
+    for index, item in enumerate(normal_attempts):
+        request_id = item.get("request_id")
+        key = ("request_id", request_id) if request_id is not None else ("event_index", index)
+        logical_attempts.setdefault(key, []).append(item)
+
+    normal = [
+        max(
+            attempts,
+            key=lambda item: (
+                int(item.get("attempt", 1)),
+                float(item.get("monotonic_ms", 0)),
+            ),
+        )
+        for attempts in logical_attempts.values()
     ]
     normal_success = [item for item in normal if item.get("result") == "success"]
     success_rate = len(normal_success) / len(normal) if normal else 0.0
@@ -248,6 +287,31 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
     request_thresholds = profile["thresholds"]["requests"]
     strict_performance = profile["profile_kind"] != "smoke"
     check("requests.normal_success_rate", success_rate >= request_thresholds["success_rate_min"], f">= {request_thresholds['success_rate_min']}", success_rate, enforce=strict_performance)
+    configured_slave_count = int(profile.get("load", {}).get("slave_count", 0))
+    for slave_id in range(1, configured_slave_count + 1):
+        slave_requests = [item for item in normal if item.get("slave_id") == slave_id]
+        slave_successes = [item for item in slave_requests if item.get("result") == "success"]
+        slave_success_rate = (
+            len(slave_successes) / len(slave_requests) if slave_requests else 0.0
+        )
+        check(
+            f"requests.slave_{slave_id}.normal_success_rate",
+            bool(slave_requests)
+            and slave_success_rate >= request_thresholds["success_rate_min"],
+            f">= {request_thresholds['success_rate_min']}",
+            slave_success_rate,
+            enforce=strict_performance,
+        )
+    normal_serial_io_transient = sum(
+        1 for item in normal_attempts if item.get("result") == "serial_io_transient"
+    )
+    check(
+        "requests.normal_serial_io_transient",
+        normal_serial_io_transient == 0,
+        0,
+        normal_serial_io_transient,
+        enforce=strict_performance,
+    )
     check("requests.normal_throughput", throughput >= request_thresholds["throughput_min_per_second"], f">= {request_thresholds['throughput_min_per_second']}", throughput, enforce=strict_performance)
     latency_p95 = _percentile(latencies, 0.95)
     latency_p99 = _percentile(latencies, 0.99)
@@ -258,7 +322,7 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
     known_results = {
         "success", "response_timeout", "crc_mismatch", "truncated_frame", "remote_exception",
         "serial_io_transient", "invalid_configuration", "broadcast_unsupported",
-        "shutdown_cancelled",
+        "deadline_exceeded", "shutdown_cancelled",
     }
     unclassified = sum(1 for item in request_events if item.get("result") not in known_results)
     check("requests.unclassified_errors", unclassified <= request_thresholds["unclassified_errors_max"], request_thresholds["unclassified_errors_max"], unclassified)
@@ -514,6 +578,12 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
     metrics = {
         "request_events": len(request_events),
         "normal_request_events": len(normal),
+        "normal_request_attempt_events": len(normal_attempts),
+        "normal_retry_recoveries": sum(
+            1
+            for attempts in logical_attempts.values()
+            if len(attempts) > 1 and max(attempts, key=lambda item: int(item.get("attempt", 1))).get("result") == "success"
+        ),
         "normal_success_rate": success_rate,
         "normal_throughput_per_second": throughput,
         "latency_p95_ms": latency_p95 if math.isfinite(latency_p95) else None,

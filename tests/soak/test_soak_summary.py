@@ -30,6 +30,22 @@ class SoakSummaryUnitTest(unittest.TestCase):
         faults = [fault for fault in profile["faults"] if fault["actor"] == "driver"]
         driver = [{"event": "soak_driver_started", "monotonic_ms": 1000}]
         for fault in faults:
+            recovery_event = {
+                "event": "fault_recovered",
+                "fault_id": fault["fault_id"],
+                "monotonic_ms": 3000,
+            }
+            if fault["kind"] == "pty_disconnect":
+                recovery_event.update(
+                    {
+                        "all_slaves_recovered": True,
+                        "recovery_ms": 200,
+                        "slaves": [
+                            {"slave_id": slave_id, "recovered": True, "recovery_ms": 200}
+                            for slave_id in (1, 2, 3)
+                        ],
+                    }
+                )
             driver.extend(
                 [
                     {
@@ -39,7 +55,7 @@ class SoakSummaryUnitTest(unittest.TestCase):
                         "monotonic_ms": 2000,
                     },
                     {"event": "fault_cleared", "fault_id": fault["fault_id"], "monotonic_ms": 2800},
-                    {"event": "fault_recovered", "fault_id": fault["fault_id"], "monotonic_ms": 3000},
+                    recovery_event,
                 ]
             )
         queue = {"capacity": 16, "maximum_depth": 2, "full": 0}
@@ -166,6 +182,160 @@ class SoakSummaryUnitTest(unittest.TestCase):
             self.assertEqual(oracles["requests.unclassified_errors"]["actual"], 0)
             self.assertEqual(oracles["requests.normal_success_rate"]["actual"], 1.0)
             self.assertEqual(summary["status"], "PASS")
+
+    def test_single_slave_degradation_fails_even_when_global_rate_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            self.make_evidence(directory)
+            profile_path = directory / "profile.json"
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            profile["profile_kind"] = "release"
+            profile["thresholds"]["requests"]["success_rate_min"] = 0.9
+            write_json(profile_path, profile)
+            gateway_path = directory / "gateway_0001.jsonl"
+            gateway = [json.loads(line) for line in gateway_path.read_text().splitlines()]
+            for index in range(100):
+                gateway.append(
+                    {
+                        "event": "request_completed",
+                        "monotonic_ms": 90500 + index,
+                        "slave_id": 1,
+                        "result": "success",
+                        "duration_ms": 1,
+                    }
+                )
+            gateway.extend(
+                [
+                    {
+                        "event": "request_completed",
+                        "monotonic_ms": 90650,
+                        "slave_id": 2,
+                        "result": "success",
+                        "duration_ms": 1,
+                    },
+                    {
+                        "event": "request_completed",
+                        "monotonic_ms": 90651,
+                        "slave_id": 2,
+                        "result": "serial_io_transient",
+                        "duration_ms": 0,
+                    },
+                ]
+            )
+            gateway_path.write_text(
+                "".join(json.dumps(item) + "\n" for item in gateway), encoding="utf-8"
+            )
+
+            summary = summarize(directory)
+            oracles = {item["oracle_id"]: item for item in summary["oracles"]}
+
+            self.assertTrue(oracles["requests.normal_success_rate"]["passed"])
+            self.assertFalse(oracles["requests.slave_2.normal_success_rate"]["passed"])
+            self.assertEqual(summary["status"], "FAIL")
+
+    def test_serial_io_transient_outside_fault_window_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            self.make_evidence(directory)
+            profile_path = directory / "profile.json"
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            profile["profile_kind"] = "release"
+            write_json(profile_path, profile)
+            gateway_path = directory / "gateway_0001.jsonl"
+            gateway = [json.loads(line) for line in gateway_path.read_text().splitlines()]
+            gateway.extend(
+                [
+                    {
+                        "event": "request_completed",
+                        "monotonic_ms": 90500,
+                        "slave_id": 1,
+                        "result": "success",
+                        "duration_ms": 1,
+                    },
+                    {
+                        "event": "request_completed",
+                        "monotonic_ms": 90600,
+                        "slave_id": 2,
+                        "result": "serial_io_transient",
+                        "duration_ms": 0,
+                    },
+                ]
+            )
+            gateway_path.write_text(
+                "".join(json.dumps(item) + "\n" for item in gateway), encoding="utf-8"
+            )
+
+            summary = summarize(directory)
+            oracles = {item["oracle_id"]: item for item in summary["oracles"]}
+
+            self.assertEqual(oracles["requests.normal_serial_io_transient"]["actual"], 1)
+            self.assertFalse(oracles["requests.normal_serial_io_transient"]["passed"])
+            self.assertEqual(summary["status"], "FAIL")
+
+    def test_retry_success_is_one_successful_logical_request(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            self.make_evidence(directory)
+            gateway_path = directory / "gateway_0001.jsonl"
+            gateway = [json.loads(line) for line in gateway_path.read_text().splitlines()]
+            gateway.extend(
+                [
+                    {
+                        "event": "request_completed",
+                        "monotonic_ms": 90500,
+                        "request_id": 42,
+                        "attempt": 1,
+                        "slave_id": 2,
+                        "result": "serial_io_transient",
+                        "duration_ms": 0,
+                    },
+                    {
+                        "event": "request_completed",
+                        "monotonic_ms": 90700,
+                        "request_id": 42,
+                        "attempt": 2,
+                        "slave_id": 2,
+                        "result": "success",
+                        "duration_ms": 1,
+                    },
+                ]
+            )
+            gateway_path.write_text(
+                "".join(json.dumps(item) + "\n" for item in gateway), encoding="utf-8"
+            )
+
+            summary = summarize(directory)
+            oracles = {item["oracle_id"]: item for item in summary["oracles"]}
+
+            self.assertEqual(oracles["requests.normal_success_rate"]["actual"], 1.0)
+            self.assertEqual(summary["metrics"]["normal_request_events"], 1)
+            self.assertEqual(summary["metrics"]["normal_request_attempt_events"], 2)
+            self.assertEqual(summary["metrics"]["normal_retry_recoveries"], 1)
+
+    def test_pty_recovery_requires_all_three_slaves(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            self.make_evidence(directory)
+            driver_path = directory / "driver_0001.jsonl"
+            driver = [json.loads(line) for line in driver_path.read_text().splitlines()]
+            pty_recovery = next(
+                item
+                for item in driver
+                if item.get("event") == "fault_recovered"
+                and item.get("fault_id") == "pty_disconnect"
+            )
+            pty_recovery["all_slaves_recovered"] = False
+            pty_recovery["slaves"][1]["recovered"] = False
+            driver_path.write_text(
+                "".join(json.dumps(item) + "\n" for item in driver), encoding="utf-8"
+            )
+
+            summary = summarize(directory)
+            oracles = {item["oracle_id"]: item for item in summary["oracles"]}
+
+            oracle = oracles["fault.pty_disconnect.cycle_0.all_slaves_recovered"]
+            self.assertFalse(oracle["passed"])
+            self.assertEqual(summary["status"], "FAIL")
 
     def test_failed_stop_flag_returns_non_pass(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

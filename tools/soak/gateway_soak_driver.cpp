@@ -5,6 +5,8 @@
 #include "industrial_iot_gateway/runtime/gateway_runtime.hpp"
 #include "industrial_iot_gateway/simulation/pty_bus_harness.hpp"
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -155,15 +157,27 @@ struct FaultState {
   Clock::time_point clear_at{};
   Clock::time_point recovery_deadline{};
   std::uint64_t success_at_clear{};
+  std::array<std::uint64_t, 4U> slave_successes_at_clear{};
+  std::array<bool, 4U> slave_recovered{};
+  std::array<std::uint64_t, 4U> slave_recovery_ms{};
 };
+
+[[nodiscard]] std::array<std::uint64_t, 4U>
+slave_success_snapshot(const GatewayRuntimeStatistics &statistics) {
+  std::array<std::uint64_t, 4U> values{};
+  for (std::uint8_t slave_id = 1U; slave_id <= 3U; ++slave_id) {
+    values[slave_id] = statistics.slaves[slave_id].requests_succeeded;
+  }
+  return values;
+}
 
 [[nodiscard]] std::uint64_t slave_successes(const GatewayRuntimeStatistics &statistics,
                                             const Json &fault) {
-  if (fault.at("kind") == "pty_disconnect") {
-    return statistics.slaves[1].requests_succeeded + statistics.slaves[2].requests_succeeded +
-           statistics.slaves[3].requests_succeeded;
-  }
   return statistics.slaves[fault.value("target_slave", 3U)].requests_succeeded;
+}
+
+[[nodiscard]] bool all_slaves_recovered(const FaultState &state) {
+  return state.slave_recovered[1] && state.slave_recovered[2] && state.slave_recovered[3];
 }
 
 } // namespace
@@ -291,7 +305,11 @@ int run(int argc, char **argv) {
         }
         state.active = false;
         state.awaiting_recovery = true;
-        state.success_at_clear = slave_successes(runtime.statistics(), state.definition);
+        const auto statistics_at_clear = runtime.statistics();
+        state.success_at_clear = slave_successes(statistics_at_clear, state.definition);
+        state.slave_successes_at_clear = slave_success_snapshot(statistics_at_clear);
+        state.slave_recovered.fill(false);
+        state.slave_recovery_ms.fill(0U);
         state.recovery_deadline =
             Clock::now() +
             std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(
@@ -299,9 +317,38 @@ int run(int argc, char **argv) {
         emit({{"event", "fault_cleared"}, {"fault_id", state.definition.at("fault_id")}});
       }
       if (state.awaiting_recovery) {
-        if (slave_successes(runtime.statistics(), state.definition) > state.success_at_clear) {
+        bool recovered{};
+        Json recovery_details = Json::object();
+        if (state.definition.at("kind") == "pty_disconnect") {
+          const auto current = runtime.statistics();
+          Json slaves = Json::array();
+          for (std::uint8_t slave_id = 1U; slave_id <= 3U; ++slave_id) {
+            if (!state.slave_recovered[slave_id] && current.slaves[slave_id].requests_succeeded >
+                                                        state.slave_successes_at_clear[slave_id]) {
+              state.slave_recovered[slave_id] = true;
+              state.slave_recovery_ms[slave_id] =
+                  static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                 Clock::now() - state.clear_at)
+                                                 .count());
+            }
+            slaves.push_back({{"slave_id", slave_id},
+                              {"recovered", state.slave_recovered[slave_id]},
+                              {"recovery_ms", state.slave_recovery_ms[slave_id]}});
+          }
+          recovered = all_slaves_recovered(state);
+          recovery_details["slaves"] = std::move(slaves);
+          recovery_details["all_slaves_recovered"] = recovered;
+          recovery_details["recovery_ms"] = std::max(
+              {state.slave_recovery_ms[1], state.slave_recovery_ms[2], state.slave_recovery_ms[3]});
+        } else {
+          recovered =
+              slave_successes(runtime.statistics(), state.definition) > state.success_at_clear;
+        }
+        if (recovered) {
           state.awaiting_recovery = false;
-          emit({{"event", "fault_recovered"}, {"fault_id", state.definition.at("fault_id")}});
+          Json event{{"event", "fault_recovered"}, {"fault_id", state.definition.at("fault_id")}};
+          event.update(recovery_details);
+          emit(std::move(event));
         } else if (Clock::now() > state.recovery_deadline) {
           state.awaiting_recovery = false;
           internal_failure = true;

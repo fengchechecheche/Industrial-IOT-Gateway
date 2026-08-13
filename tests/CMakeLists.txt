@@ -642,7 +642,7 @@ if(GATEWAY_BUILD_PTY_SLAVE)
     gateway_runtime_pty_test
     PROPERTIES
       LABELS "integration;pty;runtime"
-      TIMEOUT 15
+      TIMEOUT 60
     DISCOVERY_TIMEOUT 10
   )
   gtest_discover_tests(
@@ -671,7 +671,7 @@ if(GATEWAY_BUILD_PTY_SLAVE)
     gateway_runtime_pty_suite
     PROPERTIES
       LABELS pty
-      TIMEOUT 15
+      TIMEOUT 60
   )
   add_test(NAME gateway_app_process_suite COMMAND gateway_app_process_test)
   set_tests_properties(

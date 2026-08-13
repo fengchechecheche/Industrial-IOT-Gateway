@@ -60,6 +60,15 @@ void write_best_effort(const int descriptor, const std::uint8_t *data,
   }
 }
 
+void drain_nonblocking(const int descriptor) noexcept {
+  if (descriptor < 0) {
+    return;
+  }
+  std::array<std::uint8_t, 256U> stale_bytes{};
+  while (::read(descriptor, stale_bytes.data(), stale_bytes.size()) > 0) {
+  }
+}
+
 } // namespace
 
 PtyBusHarness::PtyBusHarness(std::string register_map_path, std::string scenario_path,
@@ -135,8 +144,9 @@ bool PtyBusHarness::disconnect_and_reconnect(const std::chrono::milliseconds out
   }
   static_cast<void>(::close(disconnected_master_fd));
   std::this_thread::sleep_for(outage);
-  std::array<std::uint8_t, 256U> stale_requests{};
-  while (::read(gateway_master_fd_, stale_requests.data(), stale_requests.size()) > 0) {
+  drain_nonblocking(gateway_master_fd_);
+  for (const auto slave_fd : slave_fds_) {
+    drain_nonblocking(slave_fd);
   }
   relay_stop_requested_.store(false);
   relay_thread_ = std::thread([this] { relay_loop(); });
