@@ -1,0 +1,389 @@
+schema_version: "1.0"
+project:
+  name: "Industrial-IOT-Gateway"
+  local_identifier: "industrial_iot_gateway"
+  document_status: "USER_APPROVED_AND_FINALIZED"
+  generated_on: "2026-08-15"
+  reviewed_on: "2026-08-15"
+
+frozen_input:
+  repository_revision: "a1fbcdc7661c6fee61c688259ee222872a3cce87"
+  worktree_state: "clean"
+  release_scope: "Linux x86_64 软件 MVP"
+  release_state: "稳定 bundle 已验证但未创建 Git tag、未上传 GitHub Release"
+
+evidence_inputs:
+  - path: "docs/p3_s7_t01_release_gate_decision.md"
+    sha256: "513a4aedd1f2fa2b45f96f44c3f96de4e4693d0480ee24ca3548af3f2f035c38"
+  - path: "docs/p3_s7_t02_validation.md"
+    sha256: "0a8c6f5ecc820cd4e60df60c40672c85601693ed346e6e7ba8eeeef63ab9ae22"
+  - path: "docs/p3_s6_validation.md"
+    sha256: "9dde68538cabf0bb46b117b7eb178b0f36fe79b06b391da97901f94c5388c93a"
+  - path: "docs/p3_s7_t04_validation.md"
+    sha256: "58c47279d13629950e485905a47c412cda6a3231f01f6ff9c455747a39a255c2"
+  - path: "docs/p3_s7_arm64_t01_validation.md"
+    sha256: "3ac9cd3e1ae78a22bc9b859bd8430ae97c95af5a80ba796c4ccf9bd8cbef5843"
+  - path: "docs/p3_s7_arm64_t01_build_matrix.json"
+    sha256: "82afaa646e3a41e88a0f0b517a4b49aa2fe4f03af3abcfe8f63fcc8473e735ef"
+  - path: "docs/P3-S7-ARM64-T02_validation.md"
+    sha256: "20db641e50174bf33e435b3e43a615f5b51d657554d657ae78b90a1631ae41ee"
+  - path: "docs/P3-S7-ARM64-T02_systemd_matrix.json"
+    sha256: "fb9bef0954a541698e2cd096591ad95051f62cfb9360488749034f61e3ae3bbc"
+  - path: "THIRD_PARTY_NOTICES.md"
+    sha256: "def8f9da22dc2c5aadfd4692874779d6ce1d946f540411cabfabeb73db4098a9"
+  - path: "LICENSE"
+    sha256: "d076e1b9a818b868168efef2ee11224cd31c5493047e8b0d4879e6be88e38b76"
+  - path: "README.md"
+    sha256: "1219fcd51c5dd1153bc488dd56165e37f2d70f37028882115465b20dc680a60f"
+  - path: "docs/runbook.md"
+    sha256: "6e3358e62ea011d3607dff13358d659368d1045b35d604bb8dc402536104ddbb"
+
+facts:
+  - fact_id: "P3-F001"
+    statement: "项目实现了 Modbus RTU 0x03、0x04、0x06 子集，包括 CRC16、请求/响应编解码、流式组帧、异常响应与错误分类。"
+    status: "VERIFIED_IMPLEMENTATION"
+    evidence_refs:
+      - "docs/protocol_subset.md"
+      - "include/industrial_iot_gateway/protocol/"
+      - "src/protocol/"
+    metrics: ["3 个功能码"]
+    limitations: ["不是完整 Modbus 功能集", "未证明真实 RS485 物理层兼容性"]
+
+  - fact_id: "P3-F002"
+    statement: "冻结的示例寄存器映射包含 3 个从站和 16 个点位，并描述功能码、数据类型、缩放、质量和 MQTT 映射。"
+    status: "VERIFIED_IMPLEMENTATION"
+    evidence_refs:
+      - "config/examples/register_map.yaml"
+      - "docs/register_map.md"
+    metrics: ["3 个从站", "16 个点位"]
+    limitations: ["点位为软件 MVP 配置，不等于已匹配具体商用传感器手册"]
+
+  - fact_id: "P3-F003"
+    statement: "项目实现了 termios 非阻塞串口封装、单串口所有者和多从站轮询调度。"
+    status: "VERIFIED_IMPLEMENTATION"
+    evidence_refs:
+      - "include/industrial_iot_gateway/transport/serial_port.hpp"
+      - "include/industrial_iot_gateway/scheduler/poll_scheduler.hpp"
+      - "src/runtime/gateway_runtime.cpp"
+    metrics: []
+    limitations: ["正式软件验收主要使用 Linux PTY"]
+
+  - fact_id: "P3-F004"
+    statement: "项目实现了超时、重试、退避和 fresh/stale/offline/invalid 数据质量转换。"
+    status: "VERIFIED_IMPLEMENTATION"
+    evidence_refs:
+      - "include/industrial_iot_gateway/scheduler/reliability_policy.hpp"
+      - "include/industrial_iot_gateway/quality/freshness_tracker.hpp"
+      - "src/scheduler/reliability_policy.cpp"
+      - "src/quality/freshness_tracker.cpp"
+    metrics: []
+    limitations: ["质量状态是软件合同，不代表传感器计量准确度"]
+
+  - fact_id: "P3-F005"
+    statement: "项目实现了有界请求/发布队列、显式请求公平性、结构化日志和有界关闭协调。"
+    status: "VERIFIED_IMPLEMENTATION"
+    evidence_refs:
+      - "include/industrial_iot_gateway/concurrency/bounded_queue.hpp"
+      - "include/industrial_iot_gateway/pipeline/"
+      - "include/industrial_iot_gateway/lifecycle/shutdown_coordinator.hpp"
+      - "include/industrial_iot_gateway/observability/structured_log.hpp"
+    metrics: ["总关闭预算 5000 ms", "MQTT drain 上限 2000 ms"]
+    limitations: ["不构成实时系统或确定性时延保证"]
+
+  - fact_id: "P3-F006"
+    statement: "项目基于 Eclipse Paho 集成 MQTT 3.1.1 QoS 1 异步上行，包含消息合同、最新值合并、有界缓存、重连退避与运行指标。"
+    status: "VERIFIED_IMPLEMENTATION"
+    evidence_refs:
+      - "docs/mqtt_contract.md"
+      - "include/industrial_iot_gateway/mqtt/"
+      - "src/mqtt/"
+      - "THIRD_PARTY_NOTICES.md"
+    metrics: ["MQTT 3.1.1", "QoS 1"]
+    limitations: ["不支持 MQTT 下行写寄存器", "未验证生产 TLS、凭据或云平台"]
+
+  - fact_id: "P3-F007"
+    statement: "正式 G3 软件故障矩阵在 PTY 与本地 Mosquitto 环境完成 15/15 场景，结果为 PASS。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s4_t03_validation.md"
+      - "artifacts/baseline/20260809T155317Z_g3_b293e40_001/summary.json"
+      - "run:20260809T155317Z_g3_b293e40_001"
+    metrics: ["15/15 场景 PASS", "failures=[]", "unclosed_failures=0"]
+    limitations: ["软件故障注入，不是物理 RS485/CAN 故障试验"]
+
+  - fact_id: "P3-F008"
+    statement: "Linux x86_64 正式 G4 软件长稳运行达到 28800.046 秒，224/224 个强制 oracle 通过。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s7_t04_validation.md"
+      - "artifacts/soak/release/20260813T213614Z_soak_release_dd671cf_001/summary.json"
+      - "run:20260813T213614Z_soak_release_dd671cf_001"
+    metrics: ["28800.046 秒", "224/224 enforced oracles PASS", "normal_success_rate=1.0", "failures=[]"]
+    limitations: ["PTY 与本地 Mosquitto 软件环境", "单次 8 小时运行不能外推为工业现场可靠性"]
+
+  - fact_id: "P3-F009"
+    statement: "VMware Ubuntu Server 24.04 x86_64 的原生 systemd G5 十场景验收为 10/10 PASS。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s7_t04_validation.md"
+      - "run:20260814T111107Z_systemd_d2bcfde9_001"
+    metrics: ["10/10 场景 PASS", "systemd 255"]
+    limitations: ["虚拟机软件验收，不是树莓派或真实硬件证据"]
+
+  - fact_id: "P3-F010"
+    statement: "Linux x86_64 稳定 bundle 包含 9 个正式安装文件，两处独立安装目录生成相同规范化归档，并通过清洁解包、运行与卸载复演。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s7_t04_validation.md"
+      - "run:20260814T112347Z_d2bcfde9_001"
+    metrics: ["9 个安装文件", "2 个独立安装目录归档一致"]
+    limitations: ["bundle ready 但尚未创建 tag 或公开发布"]
+
+  - fact_id: "P3-F011"
+    statement: "Raspberry Pi 4B / Ubuntu Server 24.04 ARM64 完成原生构建和质量门；Release 完整 CTest 为 191/191 PASS。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s7_arm64_t01_validation.md"
+      - "docs/p3_s7_arm64_t01_build_matrix.json"
+      - "run:20260814T171411Z_arm64_native_e62de0e_003"
+    metrics:
+      - "MQTT OFF 179/179 PASS"
+      - "MQTT ON Debug 191/191 PASS"
+      - "Release 191/191 PASS"
+      - "ASan/UBSan 191/191 PASS"
+      - "TSan targeted 24/24 与 full 191/191 PASS"
+      - "Python 35/35 PASS"
+      - "数据合同 20/20 PASS"
+    limitations: ["未执行 ARM64 8 小时长稳", "未形成 ARM64 Release bundle"]
+
+  - fact_id: "P3-F012"
+    statement: "Raspberry Pi 4B / Ubuntu Server 24.04 ARM64 的原生 PID 1/systemd 十场景验收为 10/10 PASS。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/P3-S7-ARM64-T02_validation.md"
+      - "docs/P3-S7-ARM64-T02_systemd_matrix.json"
+      - "run:20260814T181641Z_systemd_124724e0_001"
+    metrics: ["10/10 场景 PASS", "failures=[]", "SHA256SUMS 有效"]
+    limitations: ["软件服务集成验收，不含 USB-RS485、STM32 或 CAN"]
+
+  - fact_id: "P3-F013"
+    statement: "项目自有代码采用 MIT License；Paho、Mosquitto、yaml-cpp、nlohmann/json、GoogleTest、Linux PTY/termios 和 systemd 均为第三方或平台能力。"
+    status: "VERIFIED_IMPLEMENTATION"
+    evidence_refs: ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+    metrics: []
+    limitations: ["不得把第三方协议栈、broker、解析库、测试框架或服务管理器表述为个人实现"]
+
+  - fact_id: "P3-F014"
+    statement: "真实 USB-RS485、商用 Modbus 从站、STM32 与 CAN 台架验收尚未执行。"
+    status: "NOT_RUN_OPTIONAL"
+    evidence_refs:
+      - "docs/p3_s7_t01_release_gate_decision.md"
+      - "docs/P3-S7-ARM64-T02_validation.md"
+    metrics: ["hardware_validated=false", "G6=NOT_RUN_OPTIONAL"]
+    limitations: ["不得声称真实硬件、物理层或工业现场验证"]
+
+  - fact_id: "P3-F015"
+    statement: "ARM64 8 小时长稳尚未执行。"
+    status: "KNOWN_LIMITATION"
+    evidence_refs: ["docs/P3-S7-ARM64-T02_validation.md"]
+    metrics: ["arm64_long_soak_validated=false"]
+    limitations: ["x86_64 G4 不得替代 ARM64 长稳结论"]
+
+  - fact_id: "P3-F016"
+    statement: "ARM64 Release bundle 尚未形成或验收。"
+    status: "KNOWN_LIMITATION"
+    evidence_refs: ["docs/P3-S7-ARM64-T02_validation.md"]
+    metrics: ["arm64_release_bundle_ready=false"]
+    limitations: ["x86_64 bundle 不得扩展为多架构发布包"]
+
+  - fact_id: "P3-F017"
+    statement: "当前未创建正式 Git tag，也未上传 GitHub Release。"
+    status: "KNOWN_LIMITATION"
+    evidence_refs:
+      - "docs/p3_s7_t01_release_gate_decision.md"
+      - "docs/p3_s7_t04_validation.md"
+    metrics: []
+    limitations: ["只能表述为发布候选或 bundle ready，不能表述为已公开发布"]
+
+claims:
+  - claim_id: "P3-C001"
+    statement: "使用 C++17 实现 Modbus RTU 软件网关核心，覆盖 0x03/0x04/0x06、CRC16、流式解析、多从站轮询和数据质量状态。"
+    status: "VERIFIED_IMPLEMENTATION"
+    source_fact_ids: ["P3-F001", "P3-F002", "P3-F003", "P3-F004"]
+    evidence_refs: ["docs/protocol_subset.md", "config/examples/register_map.yaml", "src/protocol/", "src/scheduler/"]
+    metrics: ["3 个从站", "16 个点位"]
+    contribution_scope: "个人实现网关协议、调度和质量语义；使用 Linux termios 平台 API。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["软件实现", "Modbus RTU 子集"]
+    prohibited_wording: ["完整 Modbus 协议栈", "真实 RS485 已验证", "工业级"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C002"
+    statement: "基于 Eclipse Paho 集成 MQTT 3.1.1 QoS 1 异步上行，设计有界缓存、按 topic 合并、重连退避和可观测指标。"
+    status: "VERIFIED_IMPLEMENTATION"
+    source_fact_ids: ["P3-F005", "P3-F006", "P3-F013"]
+    evidence_refs: ["docs/mqtt_contract.md", "src/mqtt/", "THIRD_PARTY_NOTICES.md"]
+    metrics: ["QoS 1", "MQTT drain 上限 2000 ms"]
+    contribution_scope: "个人实现消息合同、队列策略、Paho 适配和生命周期集成；Paho 提供 MQTT 客户端协议实现。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["基于 Eclipse Paho", "MQTT 上行"]
+    prohibited_wording: ["自研 MQTT 协议栈", "自研 broker", "生产云平台已验证"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C003"
+    statement: "构建 PTY 与本地 Mosquitto 软件故障矩阵，正式 G3 的 15/15 场景通过。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F007"]
+    evidence_refs: ["docs/p3_s4_t03_validation.md", "run:20260809T155317Z_g3_b293e40_001"]
+    metrics: ["15/15 场景 PASS", "failures=[]"]
+    contribution_scope: "个人实现故障 runner、判定逻辑和结构化证据；Mosquitto 是测试 broker。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["PTY 软件仿真", "本地 Mosquitto"]
+    prohibited_wording: ["真实 RS485 故障矩阵", "硬件故障注入通过"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C004"
+    statement: "在 Linux x86_64 PTY/本地 Mosquitto 环境完成 8 小时正式长稳，224/224 个强制 oracle 通过。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F008"]
+    evidence_refs: ["docs/p3_s7_t04_validation.md", "run:20260813T213614Z_soak_release_dd671cf_001"]
+    metrics: ["28800.046 秒", "224/224 enforced oracles PASS"]
+    contribution_scope: "个人实现长稳 runner、故障周期、资源趋势和判定证据。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["Linux x86_64", "PTY 软件仿真", "本地 Mosquitto", "单次正式运行"]
+    prohibited_wording: ["工业现场 8 小时验证", "高可靠", "生产可用"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C005"
+    statement: "在 VMware Ubuntu Server 24.04 x86_64 原生 systemd 环境完成服务生命周期十场景 10/10 验收。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F009"]
+    evidence_refs: ["docs/p3_s7_t04_validation.md", "run:20260814T111107Z_systemd_d2bcfde9_001"]
+    metrics: ["10/10 场景 PASS"]
+    contribution_scope: "个人实现和执行 systemd 场景 runner；systemd/journald 属于 Linux 平台能力。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["VMware Ubuntu Server 24.04 x86_64", "原生 systemd"]
+    prohibited_wording: ["树莓派 systemd 结果", "硬件部署完成"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C006"
+    statement: "形成并复演 Linux x86_64 可复现 bundle：9 个安装文件、双目录规范化归档一致，清洁解包与卸载通过。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F010", "P3-F017"]
+    evidence_refs: ["docs/p3_s7_t04_validation.md", "run:20260814T112347Z_d2bcfde9_001"]
+    metrics: ["9 个安装文件", "2 个独立目录归档一致"]
+    contribution_scope: "个人实现安装、manifest、归档和复演流程；系统动态库不随 bundle 冒充静态交付。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["Linux x86_64", "bundle ready 但未公开发布"]
+    prohibited_wording: ["已发布 v0.1.0", "GitHub Release 已上线", "多架构发布包"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C007"
+    statement: "在 Raspberry Pi 4B / Ubuntu Server 24.04 ARM64 完成原生构建和质量门，Release 完整 CTest 191/191 通过。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F011", "P3-F015", "P3-F016"]
+    evidence_refs: ["docs/p3_s7_arm64_t01_validation.md", "docs/p3_s7_arm64_t01_build_matrix.json", "run:20260814T171411Z_arm64_native_e62de0e_003"]
+    metrics: ["Release CTest 191/191 PASS", "ASan/UBSan 191/191 PASS", "TSan full 191/191 PASS"]
+    contribution_scope: "个人完成 ARM64 可移植性修复、原生构建与质量门执行。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["Raspberry Pi 4B / Ubuntu Server 24.04 ARM64", "原生构建与软件测试", "未执行 ARM64 8 小时长稳或 bundle"]
+    prohibited_wording: ["ARM64 Release ready", "ARM64 长稳通过", "树莓派硬件总线通过"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C008"
+    statement: "在 Raspberry Pi 4B 的原生 PID 1/systemd 环境完成十场景 10/10 软件服务验收。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F012", "P3-F014"]
+    evidence_refs: ["docs/P3-S7-ARM64-T02_validation.md", "docs/P3-S7-ARM64-T02_systemd_matrix.json", "run:20260814T181641Z_systemd_124724e0_001"]
+    metrics: ["10/10 场景 PASS", "failures=[]"]
+    contribution_scope: "个人实现/执行 ARM64 systemd 软件场景验收；系统服务管理由 systemd 提供。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["Raspberry Pi 4B ARM64", "软件 systemd 验收", "不含真实 RS485/CAN"]
+    prohibited_wording: ["树莓派硬件集成通过", "RS485/CAN 台架通过"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C009"
+    statement: "明确区分个人实现的网关业务逻辑与 Paho、Mosquitto、yaml-cpp、nlohmann/json、GoogleTest、PTY/termios、systemd 等第三方或平台能力。"
+    status: "VERIFIED_IMPLEMENTATION"
+    source_fact_ids: ["P3-F013"]
+    evidence_refs: ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+    metrics: []
+    contribution_scope: "项目自有代码采用 MIT；依赖按许可证和用途列示。"
+    allowed_channels: ["interview", "public_project", "private_notes"]
+    required_qualifiers: ["集成或基于第三方能力"]
+    prohibited_wording: ["全部从零自研", "自研 MQTT broker", "自研 YAML/JSON 解析器"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C010"
+    statement: "项目已经通过真实 USB-RS485、商用 Modbus 传感器、STM32 和 CAN 台架验证。"
+    status: "REJECTED_CLAIM"
+    source_fact_ids: ["P3-F014"]
+    evidence_refs: ["docs/p3_s7_t01_release_gate_decision.md", "docs/P3-S7-ARM64-T02_validation.md"]
+    metrics: ["hardware_validated=false"]
+    contribution_scope: "未执行。"
+    allowed_channels: []
+    required_qualifiers: []
+    prohibited_wording: ["真实硬件已验证", "RS485/CAN 台架 PASS"]
+    public_safe: false
+    review_status: "REJECTED_BY_EVIDENCE"
+
+  - claim_id: "P3-C011"
+    statement: "项目已经达到工业级、生产可用或现场高可靠。"
+    status: "REJECTED_CLAIM"
+    source_fact_ids: ["P3-F008", "P3-F014"]
+    evidence_refs: ["docs/p3_s7_t04_validation.md", "docs/p3_s7_t01_release_gate_decision.md"]
+    metrics: []
+    contribution_scope: "现有软件证据不足以支持。"
+    allowed_channels: []
+    required_qualifiers: []
+    prohibited_wording: ["工业级", "生产可用", "现场验证", "高可靠"]
+    public_safe: false
+    review_status: "REJECTED_BY_EVIDENCE"
+
+  - claim_id: "P3-C012"
+    statement: "ARM64 已完成 8 小时长稳和 Release bundle，可作为正式 ARM64 发布。"
+    status: "REJECTED_CLAIM"
+    source_fact_ids: ["P3-F015", "P3-F016"]
+    evidence_refs: ["docs/P3-S7-ARM64-T02_validation.md"]
+    metrics: ["arm64_long_soak_validated=false", "arm64_release_bundle_ready=false"]
+    contribution_scope: "未执行。"
+    allowed_channels: []
+    required_qualifiers: []
+    prohibited_wording: ["ARM64 8 小时长稳 PASS", "ARM64 Release ready"]
+    public_safe: false
+    review_status: "REJECTED_BY_EVIDENCE"
+
+  - claim_id: "P3-C013"
+    statement: "项目已创建版本 tag 并发布 GitHub Release。"
+    status: "REJECTED_CLAIM"
+    source_fact_ids: ["P3-F017"]
+    evidence_refs: ["docs/p3_s7_t04_validation.md"]
+    metrics: []
+    contribution_scope: "未执行。"
+    allowed_channels: []
+    required_qualifiers: []
+    prohibited_wording: ["已发布", "GitHub Release 已上线"]
+    public_safe: false
+    review_status: "REJECTED_BY_EVIDENCE"
+
+  - claim_id: "P3-C014"
+    statement: "为故障矩阵、长稳、systemd 生命周期和可复现打包建立结构化证据链，使测试结论可由场景、summary、failure 与哈希追踪。"
+    status: "VERIFIED_IMPLEMENTATION"
+    source_fact_ids: ["P3-F007", "P3-F008", "P3-F009", "P3-F010", "P3-F012"]
+    evidence_refs: ["tools/fault/", "tools/soak/", "tools/release/", "docs/p3_s7_t04_validation.md", "docs/P3-S7-ARM64-T02_validation.md"]
+    metrics: ["G3 15 场景", "G4 224 个强制 oracle", "x86_64 G5 10 场景", "ARM64 systemd 10 场景"]
+    contribution_scope: "个人实现 runner、判定规则与证据组织；平台工具负责进程和服务能力。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["软件证据链"]
+    prohibited_wording: ["认证级测试平台", "第三方认证"]
+    public_safe: true
+    review_status: "USER_APPROVED"
