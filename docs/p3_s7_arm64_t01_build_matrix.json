@@ -1,0 +1,140 @@
+{
+  "schema_version": "1.0",
+  "work_item": "P3-S7-ARM64-T01",
+  "source_revision": "e62de0e946820c163c25fd7c82ebc3c4bc07afb5",
+  "formal_run_id": "20260814T171411Z_arm64_native_e62de0e_003",
+  "platform": {
+    "board": "Raspberry Pi 4 Model B Rev 1.5",
+    "operating_system": "Ubuntu Server 24.04 ARM64",
+    "architecture": "aarch64",
+    "build_parallelism": 4
+  },
+  "gates": [
+    {
+      "gate": "environment_preflight",
+      "status": "PASS",
+      "detail": "AArch64、64 位用户空间、systemd、资源、电源和散热满足准入条件"
+    },
+    {
+      "gate": "source_identity",
+      "status": "PASS",
+      "candidate_file_count": 213,
+      "archive_sha256": "cffcdae741d2b29583a10ff272ccdc818c5468f3afa458fb035561a4d9c8c517",
+      "tree_manifest_sha256": "cc66e1b4b935c22de755c39a976b424ea461b6213e6b7508a924cfcd3231ad9d"
+    },
+    {
+      "gate": "mqtt_off_debug",
+      "status": "PASS",
+      "tests_passed": 179,
+      "tests_total": 179,
+      "last_tests_failed_present": false
+    },
+    {
+      "gate": "mqtt_on_pty_debug",
+      "status": "PASS",
+      "tests_passed": 191,
+      "tests_total": 191,
+      "last_tests_failed_present": false
+    },
+    {
+      "gate": "release",
+      "status": "PASS",
+      "tests_passed": 191,
+      "tests_total": 191,
+      "latest_evidence_run_seconds": 180.78,
+      "exit_code": 0,
+      "last_tests_failed_present": false
+    },
+    {
+      "gate": "asan_ubsan",
+      "status": "PASS",
+      "tests_passed": 191,
+      "tests_total": 191,
+      "diagnostic_matches": 0,
+      "test_seconds": 204.94
+    },
+    {
+      "gate": "clang_tidy",
+      "status": "PASS_WITH_EXISTING_WARNINGS",
+      "tests_passed": 191,
+      "tests_total": 191,
+      "errors": 0,
+      "existing_non_blocking_warnings": 17,
+      "test_seconds": 180.17
+    },
+    {
+      "gate": "clang_format",
+      "status": "PASS",
+      "files_passed": 83,
+      "files_total": 83
+    },
+    {
+      "gate": "python_compileall",
+      "status": "PASS",
+      "files_passed": 35,
+      "files_total": 35
+    },
+    {
+      "gate": "data_contracts",
+      "status": "PASS",
+      "tests_passed": 20,
+      "tests_total": 20
+    },
+    {
+      "gate": "tsan",
+      "status": "PASS",
+      "runtime_package": "libclang-rt-18-dev:arm64=1:18.1.3-1ubuntu1",
+      "safe_probe": "PASS",
+      "intentional_race_oracle": "PASS",
+      "targeted_tests_passed": 24,
+      "targeted_tests_total": 24,
+      "full_tests_passed": 191,
+      "full_tests_total": 191,
+      "project_diagnostic_matches": 0,
+      "full_test_seconds": 200.07
+    },
+    {
+      "gate": "binary_identity",
+      "status": "PASS",
+      "architecture": "AArch64",
+      "dynamic_dependency_not_found_count": 0
+    },
+    {
+      "gate": "destdir_install_stage",
+      "status": "PASS",
+      "installed_file_count": 9,
+      "paths_match": true,
+      "modes_valid": true,
+      "systemd_static_verify_exit": 0,
+      "install_tree_manifest_sha256": "7403eecc6db54a80e4eb0c6e77b7e18b0c919180712980cb5aec04b4b5f6dbf1"
+    },
+    {
+      "gate": "evidence_and_cleanup",
+      "status": "PASS",
+      "failures_count": 0,
+      "sha256sum_file_count": 31,
+      "sha256sum_verified": true,
+      "cleanup_complete": true,
+      "removed_path_count": 16,
+      "remaining_project_process_count": 0
+    },
+    {
+      "gate": "release_handoff",
+      "status": "PASS",
+      "file_count": 150,
+      "total_bytes": 24855918,
+      "trees_match": true,
+      "tree_manifest_sha256": "a26972652e2567536978b3da8bfae7c29c1d1ec74212e72c966250c9062ae7fd"
+    }
+  ],
+  "result": {
+    "status": "PASS",
+    "acceptance_marker": "PASS_P3_S7_ARM64_T01_ENVIRONMENT_AND_NATIVE_BUILD",
+    "arm64_environment_eligible": true,
+    "arm64_native_build_pass": true,
+    "arm64_software_integration_validated": false,
+    "arm64_systemd_validated": false,
+    "arm64_release_bundle_ready": false,
+    "hardware_validated": false
+  }
+}
