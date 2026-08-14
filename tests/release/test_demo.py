@@ -70,6 +70,7 @@ class DemoCliTest(unittest.TestCase):
                 command_runner=runner,
                 which=_which,
                 platform="linux",
+                machine="x86_64",
                 emit=output.append,
             )
         self.assertEqual(code, 0)
@@ -95,6 +96,7 @@ class DemoCliTest(unittest.TestCase):
             command_runner=runner,
             which=lambda name: None if name == "mosquitto" else f"/usr/bin/{name}",
             platform="linux",
+            machine="x86_64",
             emit=output.append,
         )
         self.assertEqual(code, 3)
@@ -113,6 +115,7 @@ class DemoCliTest(unittest.TestCase):
                     command_runner=runner,
                     which=_which,
                     platform="linux",
+                    machine="x86_64",
                     emit=lambda _line: None,
                 )
                 self.assertEqual(code, 4)
@@ -126,6 +129,7 @@ class DemoCliTest(unittest.TestCase):
             command_runner=runner,
             which=_which,
             platform="linux",
+            machine="x86_64",
             emit=lambda _line: None,
         )
         self.assertEqual(code, 5)
@@ -140,6 +144,7 @@ class DemoCliTest(unittest.TestCase):
                 command_runner=runner,
                 which=_which,
                 platform="win32",
+                machine="x86_64",
                 emit=lambda _line: None,
             ),
             3,
@@ -165,6 +170,7 @@ class DemoCliTest(unittest.TestCase):
                 command_runner=runner,
                 which=_which,
                 platform="linux",
+                machine="x86_64",
                 emit=lambda _line: None,
             ),
             2,
