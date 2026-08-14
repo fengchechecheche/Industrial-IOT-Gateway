@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import json
 import os
 import pathlib
+import platform
 import pwd
 import shutil
 import signal
+import socket
 import subprocess
 import time
 from collections.abc import Callable
@@ -18,6 +21,7 @@ from tools.release.systemd_runner import (
     classify_environment,
     collect_environment_identity,
     parse_systemd_properties,
+    platform_for_machine,
 )
 from tools.release.systemd_scenarios import (
     EvidenceStore,
@@ -36,6 +40,7 @@ REGISTER_MAP_PATH = CONFIG_ROOT / "register_map.yaml"
 SCENARIO_PATH = CONFIG_ROOT / "pty_slave_scenarios.yaml"
 GATEWAY_PATH = pathlib.Path("/usr/local/bin/gateway_app")
 PTY_BUS_PATH = pathlib.Path("/usr/local/libexec/industrial_iot_gateway/gateway_pty_bus")
+STATE_ROOT = pathlib.Path("/var/lib/industrial_iot_gateway")
 BROKER_PORT = 18_884
 G5_MQTT_CLIENT_ID = "iiotg5vmrunner"
 G5_GATEWAY_ID = "g5_vm"
@@ -63,6 +68,7 @@ class NativeInputs:
     scenario_config: pathlib.Path
     artifact_root: pathlib.Path
     allow_full_vm: bool
+    target_platform: str = "linux-x86_64"
 
 
 @dataclasses.dataclass
@@ -73,6 +79,152 @@ class CommandResult:
     stderr: str
     duration_ms: int
     timed_out: bool = False
+
+
+def loopback_port_in_use(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.2)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
+
+
+def file_sha256(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def write_json(path: pathlib.Path, value: object) -> None:
+    path.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def optional_command(arguments: list[str], timeout: float = 5.0) -> str:
+    try:
+        completed = subprocess.run(
+            arguments,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return completed.stdout.strip() if completed.returncode == 0 else ""
+
+
+def optional_text(path: pathlib.Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8").strip("\x00\r\n ")
+    except OSError:
+        return ""
+
+
+def os_release_fields() -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in optional_text(pathlib.Path("/etc/os-release")).splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key] = value.strip('"')
+    return values
+
+
+def memory_available_kib() -> int | None:
+    for line in optional_text(pathlib.Path("/proc/meminfo")).splitlines():
+        if line.startswith("MemAvailable:"):
+            fields = line.split()
+            return int(fields[1]) if len(fields) >= 2 else None
+    return None
+
+
+def temperature_celsius() -> float | None:
+    value = optional_text(pathlib.Path("/sys/class/thermal/thermal_zone0/temp"))
+    try:
+        return round(int(value) / 1000.0, 1)
+    except ValueError:
+        return None
+
+
+def package_versions() -> dict[str, str]:
+    packages = (
+        "cmake",
+        "libpaho-mqtt-dev",
+        "libpaho-mqttpp-dev",
+        "libyaml-cpp-dev",
+        "mosquitto",
+        "python3",
+    )
+    output = optional_command(
+        ["dpkg-query", "-W", "-f=${binary:Package}=${Version}\\n", *packages]
+    )
+    versions: dict[str, str] = {}
+    for line in output.splitlines():
+        if "=" in line:
+            name, version = line.split("=", 1)
+            versions[name] = version
+    return versions
+
+
+def environment_evidence(
+    identity: EnvironmentIdentity,
+    inputs: NativeInputs,
+    environment_class: str,
+) -> dict[str, object]:
+    disk = shutil.disk_usage(inputs.artifact_root)
+    systemd_version = optional_command(["systemctl", "--version"]).splitlines()
+    return {
+        **dataclasses.asdict(identity),
+        "environment_class": environment_class,
+        "expected_platform": inputs.target_platform,
+        "actual_platform": platform_for_machine(identity.machine),
+        "board_model": optional_text(pathlib.Path("/proc/device-tree/model")),
+        "dpkg_architecture": optional_command(["dpkg", "--print-architecture"]),
+        "os_release": os_release_fields(),
+        "python_version": platform.python_version(),
+        "systemd_version": systemd_version[0] if systemd_version else "",
+        "ntp_synchronized": optional_command(
+            ["timedatectl", "show", "--property=NTPSynchronized", "--value"]
+        ),
+        "temperature_c": temperature_celsius(),
+        "throttled_status": optional_command(["vcgencmd", "get_throttled"]),
+        "memory_available_kib": memory_available_kib(),
+        "artifact_disk_available_bytes": disk.free,
+    }
+
+
+def input_evidence(inputs: NativeInputs) -> dict[str, object]:
+    files = {
+        "native_runner": pathlib.Path(__file__).resolve(),
+        "platform_classifier": pathlib.Path(__file__).with_name("systemd_runner.py").resolve(),
+        "scenario_oracles": pathlib.Path(__file__).with_name("systemd_scenarios.py").resolve(),
+        "unit_file": inputs.unit_file,
+        "gateway_app": inputs.gateway_app,
+        "pty_bus": inputs.pty_bus,
+        "register_map": inputs.register_map,
+        "scenario_config": inputs.scenario_config,
+    }
+    return {
+        "schema_version": "p3-s7-systemd-inputs-v1",
+        "source_revision": inputs.source_revision,
+        "expected_platform": inputs.target_platform,
+        "files": {
+            name: {
+                "path": str(path),
+                "size_bytes": path.stat().st_size,
+                "sha256": file_sha256(path),
+            }
+            for name, path in files.items()
+        },
+        "package_versions": package_versions(),
+    }
 
 
 class NativeG5Runner:
@@ -89,6 +241,7 @@ class NativeG5Runner:
         self.created_pty_parent = False
         self.created_user = False
         self.created_group = False
+        self.owns_state_root = False
         self.all_events: list[dict[str, Any]] = []
 
     def command(self, label: str, arguments: list[str], timeout: float = 15.0) -> CommandResult:
@@ -225,9 +378,11 @@ class NativeG5Runner:
 
     def _check_collisions(self) -> None:
         collisions: list[str] = []
-        for path in (UNIT_PATH, CONFIG_ROOT, GATEWAY_PATH, PTY_BUS_PATH):
+        for path in (UNIT_PATH, CONFIG_ROOT, GATEWAY_PATH, PTY_BUS_PATH, STATE_ROOT):
             if path.exists() or path.is_symlink():
                 collisions.append(str(path))
+        if loopback_port_in_use(BROKER_PORT):
+            collisions.append(f"127.0.0.1:{BROKER_PORT}")
         try:
             pwd.getpwnam("iot-gw")
             collisions.append("user:iot-gw")
@@ -310,6 +465,9 @@ class NativeG5Runner:
         self.created_user = True
         self.command("dialout_group", ["usermod", "--append", "--groups", "dialout", "iot-gw"])
 
+        STATE_ROOT.mkdir(mode=0o750)
+        self.owns_state_root = True
+
         CONFIG_ROOT.mkdir(mode=0o750)
         self.owns_config = True
         self.created_pty_parent = not PTY_BUS_PATH.parent.exists()
@@ -328,7 +486,7 @@ class NativeG5Runner:
         os.chmod(SCENARIO_PATH, 0o640)
         uid = pwd.getpwnam("iot-gw").pw_uid
         gid = pwd.getpwnam("iot-gw").pw_gid
-        for path in (CONFIG_ROOT, REGISTER_MAP_PATH, SCENARIO_PATH):
+        for path in (CONFIG_ROOT, REGISTER_MAP_PATH, SCENARIO_PATH, STATE_ROOT):
             os.chown(path, uid, gid)
 
         self.command("daemon_reload", ["systemctl", "daemon-reload"])
@@ -652,6 +810,11 @@ class NativeG5Runner:
         try:
             if self.owns_config and CONFIG_ROOT.exists():
                 shutil.rmtree(CONFIG_ROOT)
+            if self.owns_state_root and STATE_ROOT.exists():
+                if STATE_ROOT.is_symlink() or not STATE_ROOT.is_dir():
+                    ok = False
+                else:
+                    shutil.rmtree(STATE_ROOT)
             parent = PTY_BUS_PATH.parent
             if self.created_pty_parent and parent.exists() and not any(parent.iterdir()):
                 parent.rmdir()
@@ -674,7 +837,9 @@ class NativeG5Runner:
                 ok = False
         residual = any(
             owned and (path.exists() or path.is_symlink()) for path, owned in owned_files
-        ) or (self.owns_config and CONFIG_ROOT.exists())
+        ) or (self.owns_config and CONFIG_ROOT.exists()) or (
+            self.owns_state_root and (STATE_ROOT.exists() or STATE_ROOT.is_symlink())
+        )
         self.store.event("cleanup_finished", cleanup_ok=ok and not residual, residual=residual)
         return ok and not residual
 
@@ -693,7 +858,7 @@ def _validate_paths(inputs: NativeInputs) -> None:
 
 
 def parse_arguments(argv: list[str] | None = None) -> NativeInputs:
-    parser = argparse.ArgumentParser(description="Run native x86_64/systemd G5 scenarios")
+    parser = argparse.ArgumentParser(description="Run native Linux/systemd G5 scenarios")
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--unit-file", required=True, type=pathlib.Path)
     parser.add_argument("--gateway-app", required=True, type=pathlib.Path)
@@ -702,6 +867,11 @@ def parse_arguments(argv: list[str] | None = None) -> NativeInputs:
     parser.add_argument("--scenario-config", required=True, type=pathlib.Path)
     parser.add_argument("--artifact-root", required=True, type=pathlib.Path)
     parser.add_argument("--allow-full-vm", action="store_true")
+    parser.add_argument(
+        "--target-platform",
+        choices=("linux-x86_64", "linux-arm64"),
+        default="linux-x86_64",
+    )
     arguments = parser.parse_args(argv)
     return NativeInputs(
         source_revision=arguments.source_revision,
@@ -712,6 +882,7 @@ def parse_arguments(argv: list[str] | None = None) -> NativeInputs:
         scenario_config=arguments.scenario_config.resolve(),
         artifact_root=arguments.artifact_root.resolve(),
         allow_full_vm=arguments.allow_full_vm,
+        target_platform=arguments.target_platform,
     )
 
 
@@ -719,11 +890,28 @@ def main(argv: list[str] | None = None) -> int:
     inputs = parse_arguments(argv)
     _validate_paths(inputs)
     identity: EnvironmentIdentity = collect_environment_identity()
-    environment_class = classify_environment(identity, allow_full_vm=inputs.allow_full_vm)
+    environment_class = classify_environment(
+        identity,
+        allow_full_vm=inputs.allow_full_vm,
+        target_platform=inputs.target_platform,
+    )
     store = EvidenceStore.create(inputs.artifact_root, inputs.source_revision)
-    store.event("environment_classified", **dataclasses.asdict(identity), environment_class=environment_class)
+    actual_platform = platform_for_machine(identity.machine)
+    environment_fields = environment_evidence(identity, inputs, environment_class)
+    write_json(store.run_dir / "environment.json", environment_fields)
+    write_json(store.run_dir / "inputs.json", input_evidence(inputs))
+    store.event("environment_classified", **environment_fields)
+    summary_fields = {
+        "expected_platform": inputs.target_platform,
+        "actual_platform": actual_platform,
+        "actual_machine": identity.machine,
+    }
     if environment_class != "NATIVE_ELIGIBLE":
-        return store.finalize(environment_class=environment_class, cleanup_ok=True)
+        return store.finalize(
+            environment_class=environment_class,
+            cleanup_ok=True,
+            summary_fields=summary_fields,
+        )
     if os.geteuid() != 0:
         store.record(
             {
@@ -734,7 +922,11 @@ def main(argv: list[str] | None = None) -> int:
                 "observation": {},
             }
         )
-        return store.finalize(environment_class=environment_class, cleanup_ok=True)
+        return store.finalize(
+            environment_class=environment_class,
+            cleanup_ok=True,
+            summary_fields=summary_fields,
+        )
 
     runner = NativeG5Runner(inputs, store)
     cleanup_ok = False
@@ -745,7 +937,11 @@ def main(argv: list[str] | None = None) -> int:
         store.event("runner_failed", error_type=type(error).__name__, detail=str(error))
     finally:
         cleanup_ok = runner.cleanup()
-    return store.finalize(environment_class=environment_class, cleanup_ok=cleanup_ok)
+    return store.finalize(
+        environment_class=environment_class,
+        cleanup_ok=cleanup_ok,
+        summary_fields=summary_fields,
+    )
 
 
 if __name__ == "__main__":

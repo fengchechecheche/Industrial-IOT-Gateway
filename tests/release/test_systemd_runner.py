@@ -36,15 +36,65 @@ class SystemdRunnerTest(unittest.TestCase):
         self.assertEqual(classify_environment(identity), "FULL_VM_REQUIRES_APPROVAL")
         self.assertEqual(classify_environment(identity, allow_full_vm=True), "NATIVE_ELIGIBLE")
 
-    def test_wrong_architecture_or_pid1_is_unsupported(self) -> None:
+    def test_arm64_requires_an_explicit_matching_target_platform(self) -> None:
         self.assertEqual(
             classify_environment(EnvironmentIdentity("aarch64", "systemd", "6.8.0", "none")),
+            "UNSUPPORTED",
+        )
+        self.assertEqual(
+            classify_environment(
+                EnvironmentIdentity("aarch64", "systemd", "6.8.0", "none"),
+                target_platform="linux-arm64",
+            ),
+            "NATIVE_ELIGIBLE",
+        )
+        self.assertEqual(
+            classify_environment(
+                EnvironmentIdentity("arm64", "systemd", "6.8.0", "none"),
+                target_platform="linux-arm64",
+            ),
+            "NATIVE_ELIGIBLE",
+        )
+
+    def test_target_platform_mismatch_or_wrong_pid1_is_unsupported(self) -> None:
+        self.assertEqual(
+            classify_environment(
+                EnvironmentIdentity("x86_64", "systemd", "6.8.0", "none"),
+                target_platform="linux-arm64",
+            ),
+            "UNSUPPORTED",
+        )
+        self.assertEqual(
+            classify_environment(
+                EnvironmentIdentity("aarch64", "systemd", "6.8.0", "none"),
+                target_platform="linux-x86_64",
+            ),
             "UNSUPPORTED",
         )
         self.assertEqual(
             classify_environment(EnvironmentIdentity("x86_64", "init", "6.8.0", "none")),
             "UNSUPPORTED",
         )
+
+    def test_arm64_full_vm_still_requires_explicit_allowance(self) -> None:
+        identity = EnvironmentIdentity("aarch64", "systemd", "6.8.0", "kvm")
+        self.assertEqual(
+            classify_environment(identity, target_platform="linux-arm64"),
+            "FULL_VM_REQUIRES_APPROVAL",
+        )
+        self.assertEqual(
+            classify_environment(
+                identity,
+                allow_full_vm=True,
+                target_platform="linux-arm64",
+            ),
+            "NATIVE_ELIGIBLE",
+        )
+
+    def test_unknown_target_platform_is_rejected(self) -> None:
+        identity = EnvironmentIdentity("riscv64", "systemd", "6.8.0", "none")
+        with self.assertRaisesRegex(SystemdContractError, "target platform"):
+            classify_environment(identity, target_platform="linux-riscv64")
 
     def test_systemctl_properties_are_parsed_and_validated(self) -> None:
         properties = parse_systemd_properties(

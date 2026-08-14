@@ -23,6 +23,11 @@ REQUIRED_G5_SCENARIOS = (
     "repeated_cycles",
 )
 
+TARGET_PLATFORM_MACHINES = {
+    "linux-x86_64": frozenset({"x86_64", "amd64"}),
+    "linux-arm64": frozenset({"aarch64", "arm64"}),
+}
+
 
 class SystemdContractError(ValueError):
     """Raised when the systemd unit or evidence violates the frozen G5 contract."""
@@ -62,12 +67,28 @@ def collect_environment_identity() -> EnvironmentIdentity:
     )
 
 
-def classify_environment(identity: EnvironmentIdentity, *, allow_full_vm: bool = False) -> str:
+def platform_for_machine(machine: str) -> str:
+    normalized = machine.lower()
+    for target_platform, machines in TARGET_PLATFORM_MACHINES.items():
+        if normalized in machines:
+            return target_platform
+    return "unsupported"
+
+
+def classify_environment(
+    identity: EnvironmentIdentity,
+    *,
+    allow_full_vm: bool = False,
+    target_platform: str = "linux-x86_64",
+) -> str:
+    expected_machines = TARGET_PLATFORM_MACHINES.get(target_platform)
+    if expected_machines is None:
+        raise SystemdContractError(f"unsupported target platform: {target_platform!r}")
     machine = identity.machine.lower()
     pid1 = identity.pid1.lower()
     kernel = identity.kernel_release.lower()
     virtualization = identity.virtualization.lower()
-    if machine not in {"x86_64", "amd64"} or pid1 != "systemd":
+    if machine not in expected_machines or pid1 != "systemd":
         return "UNSUPPORTED"
     if "microsoft" in kernel or virtualization == "wsl":
         return "DEVELOPMENT_ONLY"
@@ -146,12 +167,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=pathlib.Path, required=True)
     parser.add_argument("--records", type=pathlib.Path)
     parser.add_argument("--allow-full-vm", action="store_true")
+    parser.add_argument(
+        "--target-platform",
+        choices=tuple(TARGET_PLATFORM_MACHINES),
+        default="linux-x86_64",
+    )
     arguments = parser.parse_args(argv)
 
     identity = collect_environment_identity()
-    environment_class = classify_environment(identity, allow_full_vm=arguments.allow_full_vm)
+    environment_class = classify_environment(
+        identity,
+        allow_full_vm=arguments.allow_full_vm,
+        target_platform=arguments.target_platform,
+    )
     if arguments.mode == "detect":
-        summary = {**dataclasses.asdict(identity), "environment_class": environment_class}
+        summary = {
+            **dataclasses.asdict(identity),
+            "environment_class": environment_class,
+            "expected_platform": arguments.target_platform,
+            "actual_platform": platform_for_machine(identity.machine),
+        }
     else:
         if arguments.records is None:
             parser.error("--records is required for evaluate mode")
@@ -159,6 +194,13 @@ def main(argv: list[str] | None = None) -> int:
         if not isinstance(records, dict):
             raise SystemdContractError("scenario records must be a JSON object")
         summary = evaluate_g5(records, environment_class=environment_class)
+        summary.update(
+            {
+                "expected_platform": arguments.target_platform,
+                "actual_platform": platform_for_machine(identity.machine),
+                "actual_machine": identity.machine,
+            }
+        )
     _write_json(arguments.output, summary)
     print(f"G5_ENVIRONMENT={environment_class}")
     return 0 if environment_class == "NATIVE_ELIGIBLE" else 3

@@ -138,11 +138,20 @@ class SystemdScenariosTest(unittest.TestCase):
                 if name == "sigterm_stop":
                     observation["stop_ms"] = 5001
                 store.record(evaluate_scenario(name, observation))
-            rc = store.finalize(environment_class="NATIVE_ELIGIBLE", cleanup_ok=True)
+            rc = store.finalize(
+                environment_class="NATIVE_ELIGIBLE",
+                cleanup_ok=True,
+                summary_fields={
+                    "expected_platform": "linux-arm64",
+                    "actual_machine": "aarch64",
+                },
+            )
             self.assertNotEqual(rc, 0)
             summary = json.loads((store.run_dir / "summary.json").read_text(encoding="utf-8"))
             failures = json.loads((store.run_dir / "failures.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["status"], "FAIL")
+            self.assertEqual(summary["expected_platform"], "linux-arm64")
+            self.assertEqual(summary["actual_machine"], "aarch64")
             self.assertEqual(failures[0]["scenario"], "sigterm_stop")
             self.assertTrue((store.run_dir / "SHA256SUMS").is_file())
             self.assertFalse((store.run_dir / "PASS").exists())

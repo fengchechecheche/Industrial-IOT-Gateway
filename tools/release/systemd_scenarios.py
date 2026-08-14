@@ -5,6 +5,7 @@ import hashlib
 import json
 import pathlib
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -277,7 +278,13 @@ class EvidenceStore:
         self.records[str(name)] = record
         self.event("scenario_finished", scenario=name, status=record.get("status"))
 
-    def finalize(self, *, environment_class: str, cleanup_ok: bool) -> int:
+    def finalize(
+        self,
+        *,
+        environment_class: str,
+        cleanup_ok: bool,
+        summary_fields: Mapping[str, object] | None = None,
+    ) -> int:
         summary = evaluate_g5(self.records, environment_class=environment_class)
         failures = [
             {
@@ -305,6 +312,21 @@ class EvidenceStore:
                 "g4_inheritance_status": "REQUIRES_SEPARATE_REVIEW",
             }
         )
+        if summary_fields:
+            protected = {
+                "status",
+                "environment_class",
+                "missing_scenarios",
+                "failed_scenarios",
+                "scenario_count",
+                "source_revision",
+                "cleanup_ok",
+                "g4_inheritance_status",
+            }
+            overlap = sorted(protected.intersection(summary_fields))
+            if overlap:
+                raise G5ContractError(f"summary fields cannot override {overlap}")
+            summary.update(summary_fields)
         _write_json(self.run_dir / "records.json", self.records)
         _write_json(self.run_dir / "failures.json", failures)
         _write_json(self.run_dir / "summary.json", summary)
