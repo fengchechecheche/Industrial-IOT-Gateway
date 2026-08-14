@@ -41,6 +41,18 @@ G5_MQTT_CLIENT_ID = "iiotg5vmrunner"
 G5_GATEWAY_ID = "g5_vm"
 
 
+def resolve_shared_pty_path(alias: str) -> str:
+    try:
+        resolved = pathlib.Path(alias).resolve(strict=True)
+    except OSError as error:
+        raise G5ContractError(f"cannot resolve PTY alias {alias!r}: {error}") from error
+    if resolved.parent != pathlib.Path("/dev/pts") or not resolved.name.isdecimal():
+        raise G5ContractError(
+            f"PTY alias must resolve beneath /dev/pts, got {str(resolved)!r}"
+        )
+    return str(resolved)
+
+
 @dataclasses.dataclass(frozen=True)
 class NativeInputs:
     source_revision: str
@@ -300,13 +312,19 @@ class NativeG5Runner:
             ready_event = json.loads(ready)
         except json.JSONDecodeError as error:
             raise G5ContractError(f"invalid PTY ready event: {ready!r}") from error
-        serial_path = ready_event.get("path")
-        if ready_event.get("event") != "pty_bus_ready" or not isinstance(serial_path, str):
+        serial_alias = ready_event.get("path")
+        if ready_event.get("event") != "pty_bus_ready" or not isinstance(serial_alias, str):
             raise G5ContractError(f"PTY bus did not become ready: {ready_event!r}")
+        serial_path = resolve_shared_pty_path(serial_alias)
         self._write_environment(serial_path)
         self._start_broker()
         self.gateway_cursor = self._cursor("initial_cursor")
-        self.store.event("native_setup_complete", serial_path=serial_path, broker_port=BROKER_PORT)
+        self.store.event(
+            "native_setup_complete",
+            serial_alias=serial_alias,
+            serial_path=serial_path,
+            broker_port=BROKER_PORT,
+        )
 
     def _start_broker(self) -> None:
         if self.broker_process is not None and self.broker_process.poll() is None:
