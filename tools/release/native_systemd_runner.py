@@ -37,6 +37,8 @@ SCENARIO_PATH = CONFIG_ROOT / "pty_slave_scenarios.yaml"
 GATEWAY_PATH = pathlib.Path("/usr/local/bin/gateway_app")
 PTY_BUS_PATH = pathlib.Path("/usr/local/libexec/industrial_iot_gateway/gateway_pty_bus")
 BROKER_PORT = 18_884
+G5_MQTT_CLIENT_ID = "iiotg5vmrunner"
+G5_GATEWAY_ID = "g5_vm"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -183,7 +185,7 @@ class NativeG5Runner:
     def _write_environment(self, serial_path: str, *, broker_port: int = BROKER_PORT) -> None:
         mqtt = (
             f"--mqtt-broker-uri tcp://127.0.0.1:{broker_port} "
-            "--mqtt-client-id industrial-iot-g5 --gateway-id g5-vm"
+            f"--mqtt-client-id {G5_MQTT_CLIENT_ID} --gateway-id {G5_GATEWAY_ID}"
         )
         ENV_PATH.write_text(
             f"GATEWAY_SERIAL_DEVICE={serial_path}\n"
@@ -502,7 +504,7 @@ class NativeG5Runner:
         journal_bytes = sum(len(json.dumps(value, ensure_ascii=False).encode()) for value in events)
         return {
             "active_state": "active" if active else before.get("ActiveState", "unknown"),
-            "serial_errors_delta": int(summary.get("requests_failed", 0)),
+            "serial_open_successes": int(summary.get("serial_open_successes", 0)),
             "journal_bytes": journal_bytes,
             "cpu_time_delta_ms": max(0, (cpu_after - cpu_before) // 1_000_000),
         }
@@ -623,10 +625,18 @@ class NativeG5Runner:
         if self.owns_unit:
             self.command("cleanup_reload", ["systemctl", "daemon-reload"])
             self.command("cleanup_reset", ["systemctl", "reset-failed", FIXED_UNIT])
-        if self.created_user and self.command("cleanup_user", ["userdel", "iot-gw"]).returncode != 0:
+        if (
+            self.created_user
+            and self.command("cleanup_user", ["userdel", "iot-gw"]).returncode != 0
+        ):
             ok = False
-        if self.created_group and self.command("cleanup_group", ["groupdel", "iot-gw"]).returncode != 0:
-            ok = False
+        if self.created_group:
+            group_probe = self.command("cleanup_group_probe", ["getent", "group", "iot-gw"])
+            if group_probe.returncode == 0:
+                if self.command("cleanup_group", ["groupdel", "iot-gw"]).returncode != 0:
+                    ok = False
+            elif group_probe.returncode not in {1, 2}:
+                ok = False
         residual = any(
             owned and (path.exists() or path.is_symlink()) for path, owned in owned_files
         ) or (self.owns_config and CONFIG_ROOT.exists())

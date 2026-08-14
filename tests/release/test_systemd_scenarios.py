@@ -60,7 +60,7 @@ def passing_observation(name: str) -> dict[str, object]:
         },
         "missing_serial": {
             "active_state": "active",
-            "serial_errors_delta": 12,
+            "serial_open_successes": 0,
             "journal_bytes": 2048,
             "cpu_time_delta_ms": 40,
         },

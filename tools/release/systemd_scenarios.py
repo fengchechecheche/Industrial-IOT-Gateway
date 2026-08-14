@@ -147,7 +147,7 @@ def _evaluate_invalid_config(observation: dict[str, Any]) -> list[str]:
 def _evaluate_missing_serial(observation: dict[str, Any]) -> list[str]:
     checks = (
         _equals(observation, "active_state", "active"),
-        _bounded_integer(observation, "serial_errors_delta", 1, 100),
+        _equals(observation, "serial_open_successes", 0),
         _bounded_integer(
             observation, "journal_bytes", 0, MAX_MISSING_SERIAL_JOURNAL_BYTES
         ),
