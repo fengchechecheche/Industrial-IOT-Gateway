@@ -111,6 +111,17 @@ class NativeSystemdRunnerTest(unittest.TestCase):
             self.assertIn(["getent", "group", "iot-gw"], commands)
             self.assertNotIn(["groupdel", "iot-gw"], commands)
 
+    def test_broker_outage_refreshes_pty_before_starting_service(self) -> None:
+        source = pathlib.Path(
+            __import__("tools.release.native_systemd_runner", fromlist=["__file__"]).__file__
+        ).read_text(encoding="utf-8")
+        start = source.index("    def scenario_broker_unavailable")
+        end = source.index("    def scenario_journal_observability", start)
+        scenario = source[start:end]
+        refresh = scenario.index("self._restart_pty_fixture()")
+        service_start = scenario.index('self._start_service("g508")')
+        self.assertLess(refresh, service_start)
+
     def test_source_uses_owned_process_groups_and_no_global_kill(self) -> None:
         source = pathlib.Path(
             __import__("tools.release.native_systemd_runner", fromlist=["__file__"]).__file__

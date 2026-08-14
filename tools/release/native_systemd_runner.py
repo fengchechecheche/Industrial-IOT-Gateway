@@ -240,6 +240,52 @@ class NativeG5Runner:
         if collisions:
             raise G5ContractError(f"dedicated-host collision: {sorted(set(collisions))}")
 
+    def _start_pty_fixture(self) -> tuple[str, str]:
+        if self.pty_process is not None and self.pty_process.poll() is None:
+            raise G5ContractError("PTY fixture is already running")
+        self.pty_process = subprocess.Popen(
+            [
+                "runuser",
+                "--user",
+                "iot-gw",
+                "--",
+                str(PTY_BUS_PATH),
+                "--register-map",
+                str(REGISTER_MAP_PATH),
+                "--scenario-config",
+                str(SCENARIO_PATH),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            start_new_session=True,
+        )
+        if self.pty_process.stdout is None:
+            raise G5ContractError("PTY bus stdout is unavailable")
+        ready = self.pty_process.stdout.readline().strip()
+        try:
+            ready_event = json.loads(ready)
+        except json.JSONDecodeError as error:
+            raise G5ContractError(f"invalid PTY ready event: {ready!r}") from error
+        serial_alias = ready_event.get("path")
+        if ready_event.get("event") != "pty_bus_ready" or not isinstance(serial_alias, str):
+            raise G5ContractError(f"PTY bus did not become ready: {ready_event!r}")
+        serial_path = resolve_shared_pty_path(serial_alias)
+        self._write_environment(serial_path)
+        return serial_alias, serial_path
+
+    def _restart_pty_fixture(self) -> None:
+        self._stop_owned_process(self.pty_process)
+        self.pty_process = None
+        serial_alias, serial_path = self._start_pty_fixture()
+        self.store.event(
+            "pty_fixture_restarted",
+            serial_alias=serial_alias,
+            serial_path=serial_path,
+        )
+
     def setup(self) -> None:
         self._check_collisions()
         if self.command("groupadd", ["groupadd", "--system", "iot-gw"]).returncode != 0:
@@ -286,37 +332,7 @@ class NativeG5Runner:
             os.chown(path, uid, gid)
 
         self.command("daemon_reload", ["systemctl", "daemon-reload"])
-        self.pty_process = subprocess.Popen(
-            [
-                "runuser",
-                "--user",
-                "iot-gw",
-                "--",
-                str(PTY_BUS_PATH),
-                "--register-map",
-                str(REGISTER_MAP_PATH),
-                "--scenario-config",
-                str(SCENARIO_PATH),
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            start_new_session=True,
-        )
-        if self.pty_process.stdout is None:
-            raise G5ContractError("PTY bus stdout is unavailable")
-        ready = self.pty_process.stdout.readline().strip()
-        try:
-            ready_event = json.loads(ready)
-        except json.JSONDecodeError as error:
-            raise G5ContractError(f"invalid PTY ready event: {ready!r}") from error
-        serial_alias = ready_event.get("path")
-        if ready_event.get("event") != "pty_bus_ready" or not isinstance(serial_alias, str):
-            raise G5ContractError(f"PTY bus did not become ready: {ready_event!r}")
-        serial_path = resolve_shared_pty_path(serial_alias)
-        self._write_environment(serial_path)
+        serial_alias, serial_path = self._start_pty_fixture()
         self._start_broker()
         self.gateway_cursor = self._cursor("initial_cursor")
         self.store.event(
@@ -530,6 +546,7 @@ class NativeG5Runner:
     def scenario_broker_unavailable(self) -> dict[str, Any]:
         self._stop_owned_process(self.broker_process)
         self.broker_process = None
+        self._restart_pty_fixture()
         cursor = self._cursor("g508_cursor")
         active, properties = self._start_service("g508")
         time.sleep(4.0)
