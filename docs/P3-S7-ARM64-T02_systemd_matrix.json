@@ -1,0 +1,191 @@
+{
+  "schema_version": "p3-s7-arm64-t02-matrix-v1",
+  "generated_at": "2026-08-15",
+  "status": "PASS",
+  "acceptance_marker": "PASS_P3_S7_ARM64_T02_NATIVE_SYSTEMD_TEN_SCENARIOS",
+  "source_revision": "124724e00f6ef2c9d03323198dd618a0af1ae7cd",
+  "run_id": "20260814T181641Z_systemd_124724e0_001",
+  "raw_evidence": {
+    "location_class": "private_raspberry_pi_evidence_root",
+    "copied_to_public_repository": false,
+    "size_bytes_approximate": 1258291,
+    "pass_marker_present": true,
+    "in_progress_marker_present": false,
+    "sha256sums_verified": true
+  },
+  "platform": {
+    "expected_platform": "linux-arm64",
+    "actual_platform": "linux-arm64",
+    "machine": "aarch64",
+    "userspace_architecture": "arm64",
+    "board_model": "Raspberry Pi 4 Model B Rev 1.5",
+    "os": "Ubuntu 24.04.4 LTS",
+    "kernel": "6.8.0-1060-raspi",
+    "pid1": "systemd",
+    "systemd_version": "255.4-1ubuntu8.17",
+    "virtualization": "none",
+    "ntp_synchronized": true,
+    "temperature_c_at_start": 47.2,
+    "throttled_status_at_start": "0x0"
+  },
+  "pre_run_gates": {
+    "native_release_build": "PASS",
+    "build_parallelism": 4,
+    "ctest": "191/191_PASS",
+    "aarch64_elf": true,
+    "dynamic_dependencies_complete": true,
+    "install_tree_validation": "PASS",
+    "systemd_unit_static_validation": "PASS",
+    "fixed_object_collisions": 0,
+    "loopback_port_18884_free": true
+  },
+  "input_sha256": {
+    "gateway_app": "54444e56196d6a5066021c22401df97b3807bf733e58c57c22465176f7ca008f",
+    "gateway_pty_bus": "22881c757c8c8e71314a6973e1e8252a854d10c7bb7d01bfec56dc2bbeba79b0",
+    "native_systemd_runner": "276b41327ae8f458047865121c3d1bdc455f36ec84d3c766563f6778da0e13b6",
+    "platform_classifier": "30e252b6cdda707b2bcfb80086aa3981bc8cc176dd91d9a742a37933ead3df62",
+    "scenario_oracles": "b011f4fa7c0fba4c0ec85ddf8cbc0577e36e29fca81e3fb831662b3811912109",
+    "systemd_unit": "b17cb84ad251bbf450d920bc6ce87e164a1acbc8eeab916e4c7665c6270f89dd",
+    "register_map": "b7410b4e1399007d7744714fdbf1f4e5ae7a51d81651057d95641c97327dc323",
+    "pty_scenario_config": "5a4edd6a8eb91f2dea78c4672c21aac1c4ea2954b37ba221b89d25dbe108c605"
+  },
+  "scenarios": [
+    {
+      "id": "G5-01",
+      "name": "unit_static_verify",
+      "status": "PASS",
+      "observation": {
+        "verify_rc": 0,
+        "user": "iot-gw",
+        "restart": "on-failure",
+        "restart_delay_seconds": 2,
+        "stop_timeout_seconds": 5
+      }
+    },
+    {
+      "id": "G5-02",
+      "name": "normal_start",
+      "status": "PASS",
+      "observation": {
+        "active": true,
+        "gateway_ready": true,
+        "requests_succeeded_delta": 108,
+        "mqtt_publish_successes_delta": 111
+      }
+    },
+    {
+      "id": "G5-03",
+      "name": "sigterm_stop",
+      "status": "PASS",
+      "observation": {
+        "exit_code": 0,
+        "stop_ms": 158,
+        "final_state": "inactive"
+      }
+    },
+    {
+      "id": "G5-04",
+      "name": "sigint_direct",
+      "status": "PASS",
+      "observation": {
+        "exit_code": 0,
+        "stop_ms": 135,
+        "stopped": true
+      }
+    },
+    {
+      "id": "G5-05",
+      "name": "abnormal_restart",
+      "status": "PASS",
+      "observation": {
+        "pid_changed": true,
+        "restart_count_delta": 1,
+        "restart_ms": 2752,
+        "final_state": "active"
+      }
+    },
+    {
+      "id": "G5-06",
+      "name": "invalid_config",
+      "status": "PASS",
+      "observation": {
+        "exit_code": 4,
+        "restart_count_delta": 0,
+        "final_state": "failed"
+      }
+    },
+    {
+      "id": "G5-07",
+      "name": "missing_serial",
+      "status": "PASS",
+      "observation": {
+        "final_state": "active",
+        "serial_open_successes": 0,
+        "journal_bytes": 7974,
+        "cpu_time_delta_ms": 74
+      }
+    },
+    {
+      "id": "G5-08",
+      "name": "broker_unavailable",
+      "status": "PASS",
+      "observation": {
+        "final_state": "active",
+        "serial_successes_delta": 255,
+        "mqtt_failures_delta": 3,
+        "mqtt_reconnected": true,
+        "publish_after_recovery": true
+      }
+    },
+    {
+      "id": "G5-09",
+      "name": "journal_observability",
+      "status": "PASS",
+      "observation": {
+        "cursor_scoped": true,
+        "required_lifecycle_events_present": true
+      }
+    },
+    {
+      "id": "G5-10",
+      "name": "repeated_cycles",
+      "status": "PASS",
+      "observation": {
+        "cycles": 10,
+        "failed_cycles": 0,
+        "residual_pids": 0,
+        "fd_drift": 0,
+        "thread_drift": 0
+      }
+    }
+  ],
+  "post_run_cleanup": {
+    "cleanup_ok": true,
+    "iot_gateway_user_absent": true,
+    "iot_gateway_group_absent": true,
+    "unit_absent": true,
+    "configuration_absent": true,
+    "fixed_binaries_absent": true,
+    "state_directory_absent": true,
+    "loopback_port_18884_free": true,
+    "gateway_processes_absent": true,
+    "runner_processes_absent": true,
+    "rebuildable_release_build_removed": true,
+    "new_failed_units": 0,
+    "final_temperature_c": 49.1,
+    "final_throttled_status": "0x0"
+  },
+  "capabilities": {
+    "arm64_systemd_validated": true,
+    "arm64_software_integration_validated": true,
+    "hardware_validated": false,
+    "arm64_long_soak_validated": false,
+    "arm64_release_bundle_ready": false
+  },
+  "limitations": [
+    "PTY and loopback MQTT fixtures do not validate physical RS485 or CAN behavior",
+    "this run is not an ARM64 eight-hour soak test",
+    "this run does not create or approve an ARM64 release bundle",
+    "the prior G4 result requires separate review and is not inherited automatically"
+  ]
+}
