@@ -130,6 +130,14 @@ if(GATEWAY_BUILD_PTY_SLAVE)
   )
   gateway_enable_clang_tidy(gateway_simulation)
 
+  add_executable(gateway_pty_bus tools/simulation/pty_bus_main.cpp)
+  target_link_libraries(
+    gateway_pty_bus
+    PRIVATE industrial_iot_gateway::gateway_simulation gateway_project_options Threads::Threads
+  )
+  set_target_properties(gateway_pty_bus PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+  gateway_enable_clang_tidy(gateway_pty_bus)
+
   if(GATEWAY_ENABLE_MQTT)
     add_executable(gateway_soak_driver tools/soak/gateway_soak_driver.cpp)
     target_link_libraries(
