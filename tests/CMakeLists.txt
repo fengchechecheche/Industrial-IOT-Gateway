@@ -60,6 +60,15 @@ set_tests_properties(
 )
 
 add_test(
+  NAME release_arm64_reboot_runner_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/release/test_arm64_reboot_runner.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  release_arm64_reboot_runner_unit PROPERTIES LABELS "unit;release;system;arm64" TIMEOUT 20
+)
+
+add_test(
   NAME soak_profile_contract
   COMMAND "${Python3_EXECUTABLE}" -m unittest tests/soak/test_soak_profile.py
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
