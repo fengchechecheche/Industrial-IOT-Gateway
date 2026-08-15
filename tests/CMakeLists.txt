@@ -50,6 +50,14 @@ add_test(
 set_tests_properties(
   release_native_systemd_runner_unit PROPERTIES LABELS "unit;release;system" TIMEOUT 20
 )
+add_test(
+  NAME release_native_bundle_runner_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/release/test_native_bundle_runner.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  release_native_bundle_runner_unit PROPERTIES LABELS "unit;release;bundle" TIMEOUT 30
+)
 
 add_test(
   NAME soak_profile_contract

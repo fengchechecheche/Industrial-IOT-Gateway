@@ -30,6 +30,21 @@ CREDENTIAL_PATTERN = re.compile(
     r"(?i)\b(password|passwd|token|api[_-]?key|secret)\s*[:=]\s*(\S+)"
 )
 PRIVATE_KEY_PATTERN = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
+V2_PLATFORM_ARCHITECTURES = {
+    "linux-x86_64": "x86_64",
+    "linux-arm64": "arm64",
+}
+V2_RELEASE_STATUSES = frozenset({"candidate", "final"})
+V2_REQUIRED_CAPABILITIES = frozenset(
+    {
+        "x86_64_validated",
+        "arm64_native_build_validated",
+        "arm64_systemd_validated",
+        "arm64_long_soak_validated",
+        "arm64_release_bundle_ready",
+        "hardware_validated",
+    }
+)
 
 
 class ManifestError(ValueError):
@@ -89,18 +104,10 @@ def _file_entry(path: pathlib.Path, relative: str) -> dict[str, Any]:
     }
 
 
-def build_manifest(
-    package_root: pathlib.Path,
-    *,
-    release_name: str,
-    source_revision: str,
-    environment: Mapping[str, Any],
-    gates: Mapping[str, Any],
-) -> dict[str, Any]:
+def _collect_entries(package_root: pathlib.Path) -> list[dict[str, Any]]:
     root = package_root.resolve()
     if not root.is_dir():
         raise ManifestError(f"package root is not a directory: {package_root}")
-    validate_source_revision(source_revision)
 
     entries: list[dict[str, Any]] = []
     for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
@@ -114,6 +121,19 @@ def build_manifest(
     missing = sorted(set(REQUIRED_PACKAGE_PATHS) - included)
     if missing:
         raise ManifestError("missing required package files: " + ", ".join(missing))
+    return entries
+
+
+def build_manifest(
+    package_root: pathlib.Path,
+    *,
+    release_name: str,
+    source_revision: str,
+    environment: Mapping[str, Any],
+    gates: Mapping[str, Any],
+) -> dict[str, Any]:
+    validate_source_revision(source_revision)
+    entries = _collect_entries(package_root)
 
     return {
         "schema_version": "p3-s7-release-manifest-v1",
@@ -124,6 +144,64 @@ def build_manifest(
         "gates": dict(gates),
         "hardware_validated": False,
         "arm64_validated": False,
+        "files": entries,
+    }
+
+
+def build_manifest_v2(
+    package_root: pathlib.Path,
+    *,
+    release_name: str,
+    source_revision: str,
+    environment: Mapping[str, Any],
+    gates: Mapping[str, Any],
+    target_platform: str,
+    machine: str,
+    package_architecture: str,
+    release_status: str,
+    capabilities: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build the platform-aware manifest without changing the frozen v1 contract."""
+
+    validate_source_revision(source_revision)
+    expected_architecture = V2_PLATFORM_ARCHITECTURES.get(target_platform)
+    if expected_architecture is None:
+        raise ManifestError(f"unsupported target platform: {target_platform}")
+    if package_architecture != expected_architecture:
+        raise ManifestError(
+            "package architecture does not match target platform: "
+            f"expected {expected_architecture}, got {package_architecture}"
+        )
+    if release_status not in V2_RELEASE_STATUSES:
+        raise ManifestError(f"unsupported release status: {release_status}")
+    missing_capabilities = sorted(V2_REQUIRED_CAPABILITIES - set(capabilities))
+    if missing_capabilities:
+        raise ManifestError(
+            "missing required capability fields: " + ", ".join(missing_capabilities)
+        )
+    non_boolean = sorted(
+        name for name in V2_REQUIRED_CAPABILITIES if not isinstance(capabilities[name], bool)
+    )
+    if non_boolean:
+        raise ManifestError("capability fields must be boolean: " + ", ".join(non_boolean))
+    if capabilities["hardware_validated"]:
+        raise ManifestError("hardware_validated must remain false before physical G6")
+
+    entries = _collect_entries(package_root)
+    return {
+        "schema_version": "p3-s7-release-manifest-v2",
+        "release_name": release_name,
+        "release_status": release_status,
+        "source_revision": source_revision,
+        "target_platform": target_platform,
+        "machine": machine,
+        "package_architecture": package_architecture,
+        "environment": dict(environment),
+        "gates": dict(gates),
+        "capabilities": dict(capabilities),
+        "hardware_validated": False,
+        "published": False,
+        "tag": None,
         "files": entries,
     }
 

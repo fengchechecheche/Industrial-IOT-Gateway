@@ -9,6 +9,7 @@ from tools.release.manifest import (
     REQUIRED_PACKAGE_PATHS,
     ManifestError,
     build_manifest,
+    build_manifest_v2,
     scan_release_tree,
     sha256_file,
     validate_source_revision,
@@ -71,6 +72,74 @@ class ReleaseManifestTest(unittest.TestCase):
             self.assertGreater(entry["bytes"], 0)
             self.assertRegex(str(entry["sha256"]), r"^[0-9a-f]{64}$")
             self.assertEqual(entry["type"], "file")
+
+    def test_manifest_v2_records_platform_and_capability_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            package_root = pathlib.Path(directory)
+            create_package(package_root)
+            manifest = build_manifest_v2(
+                package_root,
+                release_name="industrial_iot_gateway-0.1.0-linux-arm64",
+                source_revision=REVISION,
+                environment={"os": "Ubuntu 24.04"},
+                gates={"G5": "PASS", "G6": "WAITING_FOR_HARDWARE"},
+                target_platform="linux-arm64",
+                machine="aarch64",
+                package_architecture="arm64",
+                release_status="candidate",
+                capabilities={
+                    "x86_64_validated": False,
+                    "arm64_native_build_validated": True,
+                    "arm64_systemd_validated": True,
+                    "arm64_long_soak_validated": False,
+                    "arm64_release_bundle_ready": False,
+                    "hardware_validated": False,
+                },
+            )
+
+        self.assertEqual(manifest["schema_version"], "p3-s7-release-manifest-v2")
+        self.assertEqual(manifest["target_platform"], "linux-arm64")
+        self.assertEqual(manifest["machine"], "aarch64")
+        self.assertEqual(manifest["package_architecture"], "arm64")
+        self.assertEqual(manifest["release_status"], "candidate")
+        self.assertTrue(manifest["capabilities"]["arm64_native_build_validated"])
+        self.assertTrue(manifest["capabilities"]["arm64_systemd_validated"])
+        self.assertFalse(manifest["capabilities"]["arm64_long_soak_validated"])
+        self.assertFalse(manifest["hardware_validated"])
+        self.assertFalse(manifest["published"])
+        self.assertIsNone(manifest["tag"])
+
+    def test_manifest_v2_rejects_inconsistent_platform_fields_and_capabilities(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            package_root = pathlib.Path(directory)
+            create_package(package_root)
+            base = {
+                "package_root": package_root,
+                "release_name": "industrial_iot_gateway-0.1.0-linux-arm64",
+                "source_revision": REVISION,
+                "environment": {},
+                "gates": {},
+                "target_platform": "linux-arm64",
+                "machine": "aarch64",
+                "package_architecture": "arm64",
+                "release_status": "candidate",
+                "capabilities": {
+                    "x86_64_validated": False,
+                    "arm64_native_build_validated": True,
+                    "arm64_systemd_validated": True,
+                    "arm64_long_soak_validated": False,
+                    "arm64_release_bundle_ready": False,
+                    "hardware_validated": False,
+                },
+            }
+            with self.assertRaisesRegex(ManifestError, "package architecture"):
+                build_manifest_v2(**{**base, "package_architecture": "x86_64"})
+            with self.assertRaisesRegex(ManifestError, "release status"):
+                build_manifest_v2(**{**base, "release_status": "published"})
+            incomplete = dict(base["capabilities"])
+            incomplete.pop("hardware_validated")
+            with self.assertRaisesRegex(ManifestError, "capability fields"):
+                build_manifest_v2(**{**base, "capabilities": incomplete})
 
     def test_missing_required_package_file_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
