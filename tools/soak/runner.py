@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, BinaryIO
 
 from .evidence import RotatingTextWriter, SoakEvidence
-from .monitor import ProcSampler
+from .monitor import Arm64HostSampler, ProcSampler, evaluate_arm64_health
 from .process import ManagedProcess
 from .profile import load_and_validate_profile, validate_execution_request
 from .summary import summarize
@@ -164,6 +164,12 @@ def run(
     for executable in (mosquitto, mosquitto_sub):
         if shutil.which(executable) is None and not pathlib.Path(executable).is_file():
             raise ValueError(f"required executable not found: {executable}")
+    arm64_sampler: Arm64HostSampler | None = None
+    evidence_policy = profile["evidence"]
+    if evidence_policy.get("temperature_required") is True:
+        arm64_sampler = Arm64HostSampler(
+            maximum_temperature_c=float(evidence_policy["temperature_max_c"])
+        )
     run_id = _run_id(profile, source_revision)
     output_directory = output_root / run_id
     evidence = SoakEvidence(
@@ -171,6 +177,7 @@ def run(
         run_id=run_id,
         profile=profile,
         source_revision=source_revision,
+        environment_details=arm64_sampler.environment() if arm64_sampler else None,
     )
     stop_event = stop_event or threading.Event()
     port = int(profile["load"]["mqtt"]["broker_port"])
@@ -264,11 +271,24 @@ def run(
             if now >= next_sample:
                 try:
                     sample = sampler.sample(elapsed)
+                    arm64_failures: list[str] = []
+                    if arm64_sampler is not None:
+                        sample.update(arm64_sampler.sample())
+                        arm64_failures = evaluate_arm64_health(
+                            sample,
+                            maximum_temperature_c=arm64_sampler.maximum_temperature_c,
+                        )
                     evidence.append_jsonl("resource_samples.jsonl", sample)
                     disk_threshold = float(profile["thresholds"]["disk"]["runtime_free_gib_min"]) * 1024**3
                     evidence_limit = int(profile["thresholds"]["disk"]["evidence_bytes_max"])
                     if sample["disk_free_bytes"] < disk_threshold or sample["evidence_bytes"] > evidence_limit:
                         evidence.event("resource_stop", sample=sample)
+                        internal_failure = True
+                        break
+                    if arm64_failures:
+                        evidence.event(
+                            "arm64_host_stop", failures=arm64_failures, sample=sample
+                        )
                         internal_failure = True
                         break
                 except (FileNotFoundError, ProcessLookupError):

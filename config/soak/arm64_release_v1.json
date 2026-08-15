@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "extends": "software_release_v2.json",
+  "profile_id": "arm64_release_v1",
+  "evidence": {
+    "raw_output_prefix": "artifacts/soak/",
+    "target_platform": "linux-arm64",
+    "temperature_required": true,
+    "temperature_max_c": 80.0,
+    "throttled_current_mask": 15,
+    "throttled_history_mask": 983040
+  }
+}

@@ -240,6 +240,18 @@ def validate_profile(profile: dict[str, Any], repository_root: pathlib.Path) -> 
     evidence = profile["evidence"]
     if not isinstance(evidence, dict) or evidence.get("raw_output_prefix") != "artifacts/soak/":
         raise ValueError("raw evidence must use artifacts/soak/")
+    temperature_required = evidence.get("temperature_required")
+    if not isinstance(temperature_required, bool):
+        raise ValueError("evidence.temperature_required must be boolean")
+    if temperature_required:
+        if evidence.get("target_platform") != "linux-arm64":
+            raise ValueError("temperature-required profile must target linux-arm64")
+        if evidence.get("temperature_max_c") != 80.0:
+            raise ValueError("ARM64 temperature_max_c must be 80.0")
+        if evidence.get("throttled_current_mask") != 0xF:
+            raise ValueError("ARM64 throttled_current_mask must be 0xF")
+        if evidence.get("throttled_history_mask") != 0xF0000:
+            raise ValueError("ARM64 throttled_history_mask must be 0xF0000")
 
 
 def load_and_validate_profile(path: pathlib.Path, repository_root: pathlib.Path) -> dict[str, Any]:
@@ -251,7 +263,14 @@ def load_and_validate_profile(path: pathlib.Path, repository_root: pathlib.Path)
 def validate_profile_pair(release: dict[str, Any], preflight: dict[str, Any]) -> None:
     if release.get("profile_kind") != "release" or preflight.get("profile_kind") != "preflight":
         raise ValueError("profile pair must be release and preflight")
-    for field in ("load", "faults", "thresholds", "sample_interval_seconds", "heartbeat_timeout_seconds"):
+    for field in (
+        "load",
+        "faults",
+        "thresholds",
+        "sample_interval_seconds",
+        "heartbeat_timeout_seconds",
+        "evidence",
+    ):
         if release.get(field) != preflight.get(field):
             raise ValueError(f"release/preflight semantic drift in {field}")
 

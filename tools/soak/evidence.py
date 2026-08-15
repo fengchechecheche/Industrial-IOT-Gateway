@@ -83,6 +83,7 @@ class SoakEvidence:
         run_id: str,
         profile: dict[str, Any],
         source_revision: str,
+        environment_details: dict[str, Any] | None = None,
     ) -> None:
         self.directory = output_directory
         self.run_id = run_id
@@ -93,17 +94,20 @@ class SoakEvidence:
         self.event_sequence = 0
         self.directory.mkdir(parents=True, exist_ok=False)
         write_json_atomic(self.directory / "profile.json", profile)
+        environment = {
+            "schema_version": SCHEMA_VERSION,
+            "platform": platform.platform(),
+            "architecture": platform.machine(),
+            "python": platform.python_version(),
+            "pid": os.getpid(),
+            "temperature": None,
+            "temperature_state": "not_available_or_not_required",
+        }
+        if environment_details:
+            environment.update(environment_details)
         write_json_atomic(
             self.directory / "environment.json",
-            {
-                "schema_version": SCHEMA_VERSION,
-                "platform": platform.platform(),
-                "architecture": platform.machine(),
-                "python": platform.python_version(),
-                "pid": os.getpid(),
-                "temperature": None,
-                "temperature_state": "not_available_or_not_required",
-            },
+            environment,
         )
         self.manifest = {
             "schema_version": SCHEMA_VERSION,

@@ -90,6 +90,12 @@ def _failure(failures: list[dict[str, Any]], oracle_id: str, expected: Any, actu
 def summarize(directory: pathlib.Path) -> dict[str, Any]:
     profile = json.loads((directory / "profile.json").read_text(encoding="utf-8"))
     manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+    environment_path = directory / "environment.json"
+    environment = (
+        json.loads(environment_path.read_text(encoding="utf-8"))
+        if environment_path.is_file()
+        else {}
+    )
     driver = _jsonl(sorted(directory.glob("driver_*.jsonl")))
     gateway = _jsonl(sorted(directory.glob("gateway_*.jsonl")), tolerate_invalid=True)
     resources = _jsonl([directory / "resource_samples.jsonl"])
@@ -135,7 +141,7 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
     check("runner.provisional_status", manifest.get("status") == "PASS", "PASS", manifest.get("status"))
     check(
         "runner.no_internal_errors",
-        not any(event_type in {"runner_exception", "json_parse_errors", "resource_stop", "heartbeat_timeout", "driver_duration_overrun", "driver_nonzero_exit"} for event_type in runner_types),
+        not any(event_type in {"runner_exception", "json_parse_errors", "resource_stop", "arm64_host_stop", "heartbeat_timeout", "driver_duration_overrun", "driver_nonzero_exit"} for event_type in runner_types),
         "no runner failure event",
         runner_types,
     )
@@ -575,6 +581,71 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
         oversized_segments,
     )
 
+    arm64_required = profile.get("evidence", {}).get("temperature_required") is True
+    temperatures = [
+        float(item["soc_temperature_c"])
+        for item in resources
+        if isinstance(item.get("soc_temperature_c"), (int, float))
+    ]
+    temperature_peak = max(temperatures, default=None)
+    current_bits = [
+        int(item["throttled_current_bits"])
+        for item in resources
+        if isinstance(item.get("throttled_current_bits"), int)
+    ]
+    new_history_bits = [
+        int(item["throttled_history_new_bits"])
+        for item in resources
+        if isinstance(item.get("throttled_history_new_bits"), int)
+    ]
+    boot_ids = [item.get("host_boot_id") for item in resources]
+    if arm64_required:
+        temperature_limit = float(profile["evidence"]["temperature_max_c"])
+        expected_boot_id = environment.get("boot_id")
+        check(
+            "arm64.platform",
+            str(environment.get("architecture", "")).lower() in {"aarch64", "arm64"},
+            "aarch64 or arm64",
+            environment.get("architecture"),
+        )
+        check(
+            "arm64.temperature_present",
+            bool(resources) and len(temperatures) == len(resources),
+            "temperature in every resource sample",
+            {"samples": len(resources), "temperatures": len(temperatures)},
+        )
+        check(
+            "arm64.temperature_peak",
+            temperature_peak is not None and temperature_peak < temperature_limit,
+            f"< {temperature_limit} C",
+            temperature_peak,
+        )
+        check(
+            "arm64.throttled_current_bits",
+            bool(resources)
+            and len(current_bits) == len(resources)
+            and all(value == 0 for value in current_bits),
+            "bits 0-3 always zero",
+            current_bits,
+        )
+        check(
+            "arm64.throttled_history_new_bits",
+            bool(resources)
+            and len(new_history_bits) == len(resources)
+            and all(value == 0 for value in new_history_bits),
+            "no new bits 16-19 relative to baseline",
+            new_history_bits,
+        )
+        check(
+            "arm64.boot_id_stable",
+            bool(resources)
+            and isinstance(expected_boot_id, str)
+            and bool(expected_boot_id)
+            and all(value == expected_boot_id for value in boot_ids),
+            expected_boot_id,
+            sorted({str(value) for value in boot_ids}),
+        )
+
     metrics = {
         "request_events": len(request_events),
         "normal_request_events": len(normal),
@@ -608,6 +679,9 @@ def summarize(directory: pathlib.Path) -> dict[str, Any]:
         "cpu_p95_percent": cpu_p95,
         "fd_peak": fd_peak,
         "thread_peak": thread_peak,
+        "soc_temperature_peak_c": temperature_peak,
+        "throttled_current_bits_max": max(current_bits, default=None),
+        "throttled_history_new_bits_max": max(new_history_bits, default=None),
     }
     status = "PASS" if not failures and manifest.get("status") != "ABORTED_ENVIRONMENT" else "FAIL"
     summary = {

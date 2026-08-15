@@ -72,6 +72,12 @@ add_test(
 )
 set_tests_properties(soak_runner_unit PROPERTIES LABELS "unit;soak" TIMEOUT 15)
 add_test(
+  NAME soak_arm64_host_telemetry_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/soak/test_arm64_host_telemetry.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(soak_arm64_host_telemetry_unit PROPERTIES LABELS "unit;soak;arm64" TIMEOUT 15)
+add_test(
   NAME soak_summary_unit
   COMMAND "${Python3_EXECUTABLE}" -m unittest tests/soak/test_soak_summary.py
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

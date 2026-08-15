@@ -27,6 +27,14 @@ class SoakSummaryUnitTest(unittest.TestCase):
             directory / "manifest.json",
             {"run_id": "unit", "status": "PASS", "monotonic_duration_seconds": 90},
         )
+        write_json(
+            directory / "environment.json",
+            {
+                "architecture": "aarch64",
+                "boot_id": "boot-a",
+                "throttled_history_baseline_bits": 0,
+            },
+        )
         faults = [fault for fault in profile["faults"] if fault["actor"] == "driver"]
         driver = [{"event": "soak_driver_started", "monotonic_ms": 1000}]
         for fault in faults:
@@ -392,6 +400,88 @@ class SoakSummaryUnitTest(unittest.TestCase):
                 if oracle["enforced"] and not oracle["passed"]
             }
             self.assertIn("fault.silent.cycle_1.triggered", failed_oracles)
+
+    def test_arm64_host_telemetry_passes_below_limit_without_new_bits(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            self.make_evidence(directory)
+            profile = json.loads((directory / "profile.json").read_text(encoding="utf-8"))
+            profile["evidence"].update(
+                {
+                    "target_platform": "linux-arm64",
+                    "temperature_required": True,
+                    "temperature_max_c": 80.0,
+                    "throttled_current_mask": 0xF,
+                    "throttled_history_mask": 0xF0000,
+                }
+            )
+            write_json(directory / "profile.json", profile)
+            samples = [
+                {
+                    "elapsed_seconds": 20,
+                    "rss_mib": 10,
+                    "cpu_percent_single_core": 1,
+                    "fd_count": 4,
+                    "thread_count": 5,
+                    "disk_free_bytes": 10 * 1024**3,
+                    "evidence_bytes": 1024,
+                    "host_boot_id": "boot-a",
+                    "soc_temperature_c": 79.9,
+                    "throttled_current_bits": 0,
+                    "throttled_history_new_bits": 0,
+                }
+            ]
+            (directory / "resource_samples.jsonl").write_text(
+                "".join(json.dumps(item) + "\n" for item in samples), encoding="utf-8"
+            )
+
+            summary = summarize(directory)
+            oracles = {item["oracle_id"]: item for item in summary["oracles"]}
+            self.assertTrue(oracles["arm64.temperature_present"]["passed"])
+            self.assertTrue(oracles["arm64.temperature_peak"]["passed"])
+            self.assertTrue(oracles["arm64.throttled_current_bits"]["passed"])
+            self.assertTrue(oracles["arm64.throttled_history_new_bits"]["passed"])
+            self.assertEqual(summary["metrics"]["soc_temperature_peak_c"], 79.9)
+            self.assertEqual(summary["status"], "PASS")
+
+    def test_arm64_temperature_and_throttling_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            self.make_evidence(directory)
+            profile = json.loads((directory / "profile.json").read_text(encoding="utf-8"))
+            profile["evidence"].update(
+                {
+                    "target_platform": "linux-arm64",
+                    "temperature_required": True,
+                    "temperature_max_c": 80.0,
+                    "throttled_current_mask": 0xF,
+                    "throttled_history_mask": 0xF0000,
+                }
+            )
+            write_json(directory / "profile.json", profile)
+            sample_path = directory / "resource_samples.jsonl"
+            sample = json.loads(sample_path.read_text(encoding="utf-8"))
+            sample.update(
+                {
+                    "host_boot_id": "boot-b",
+                    "soc_temperature_c": 80.0,
+                    "throttled_current_bits": 1,
+                    "throttled_history_new_bits": 0x10000,
+                }
+            )
+            sample_path.write_text(json.dumps(sample) + "\n", encoding="utf-8")
+
+            summary = summarize(directory)
+            failed = {
+                item["oracle_id"]
+                for item in summary["oracles"]
+                if item["enforced"] and not item["passed"]
+            }
+            self.assertIn("arm64.temperature_peak", failed)
+            self.assertIn("arm64.throttled_current_bits", failed)
+            self.assertIn("arm64.throttled_history_new_bits", failed)
+            self.assertIn("arm64.boot_id_stable", failed)
+            self.assertEqual(summary["status"], "FAIL")
 
 
 if __name__ == "__main__":

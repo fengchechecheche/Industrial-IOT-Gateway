@@ -22,6 +22,8 @@ class SoakProfileContractTest(unittest.TestCase):
             ROOT / "config/soak/software_preflight.json",
             ROOT / "config/soak/software_release_v2.json",
             ROOT / "config/soak/software_preflight_v2.json",
+            ROOT / "config/soak/arm64_release_v1.json",
+            ROOT / "config/soak/arm64_preflight_v1.json",
             ROOT / "tests/data/soak_profiles/software_smoke.json",
         ]
         for path in paths:
@@ -41,6 +43,17 @@ class SoakProfileContractTest(unittest.TestCase):
             ROOT / "config/soak/software_preflight_v2.json", ROOT
         )
         validate_profile_pair(release_v2, preflight_v2)
+
+        arm64_release = load_and_validate_profile(
+            ROOT / "config/soak/arm64_release_v1.json", ROOT
+        )
+        arm64_preflight = load_and_validate_profile(
+            ROOT / "config/soak/arm64_preflight_v1.json", ROOT
+        )
+        validate_profile_pair(arm64_release, arm64_preflight)
+        self.assertTrue(arm64_release["evidence"]["temperature_required"])
+        self.assertEqual(arm64_release["evidence"]["target_platform"], "linux-arm64")
+        self.assertEqual(arm64_release["evidence"]["temperature_max_c"], 80.0)
 
     def test_v2_keeps_fairness_and_versions_the_disk_budget(self) -> None:
         release_v1 = load_and_validate_profile(
