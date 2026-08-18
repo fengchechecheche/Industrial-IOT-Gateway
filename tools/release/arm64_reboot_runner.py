@@ -669,6 +669,36 @@ def _observed_traffic() -> tuple[float, dict[str, int], int]:
     return (min(ready_times) if ready_times else float("inf"), slaves, mqtt_messages)
 
 
+_NON_FAILED_ACTIVE_STATES = frozenset(
+    {
+        "active",
+        "activating",
+        "deactivating",
+        "inactive",
+        "maintenance",
+        "refreshing",
+        "reloading",
+    }
+)
+
+
+def _reset_failed_units(units: Sequence[str]) -> bool:
+    for unit in units:
+        probe = _run(["systemctl", "is-failed", unit])
+        if probe.returncode == 0:
+            if _run(["systemctl", "reset-failed", unit]).returncode != 0:
+                return False
+            probe = _run(["systemctl", "is-failed", unit])
+        if probe.returncode == 4:
+            continue
+        if (
+            probe.returncode != 1
+            or probe.stdout.strip() not in _NON_FAILED_ACTIVE_STATES
+        ):
+            return False
+    return True
+
+
 def _cleanup_owned(
     paths: Sequence[pathlib.Path],
     *,
@@ -680,9 +710,7 @@ def _cleanup_owned(
         _run(["systemctl", "disable", "--now", GATEWAY_UNIT, FIXTURE_UNIT], 20.0).returncode
         == 0
     )
-    reset_failed_ok = (
-        _run(["systemctl", "reset-failed", GATEWAY_UNIT, FIXTURE_UNIT]).returncode == 0
-    )
+    reset_failed_ok = _reset_failed_units((GATEWAY_UNIT, FIXTURE_UNIT))
     unlink_ok = True
     for path in sorted(paths, key=lambda value: len(value.parts), reverse=True):
         if str(path) not in ALLOWED_OWNED_PATHS:

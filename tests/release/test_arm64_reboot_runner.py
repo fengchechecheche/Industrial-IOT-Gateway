@@ -4,8 +4,10 @@ import inspect
 import json
 import os
 import pathlib
+import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from tools.release.arm64_reboot_runner import (
     RebootContractError,
@@ -240,12 +242,69 @@ class Arm64RebootRunnerTest(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, combined)
 
+    def test_reset_failed_units_skips_reset_for_non_failed_or_missing_units(self) -> None:
+        module = __import__(
+            "tools.release.arm64_reboot_runner", fromlist=["_reset_failed_units"]
+        )
+        results = [
+            subprocess.CompletedProcess([], 1, "active\n", ""),
+            subprocess.CompletedProcess([], 1, "inactive\n", ""),
+            subprocess.CompletedProcess([], 4, "inactive\n", ""),
+        ]
+        units = ("active.service", "inactive.service", "missing.service")
+        with mock.patch.object(module, "_run", side_effect=results) as run:
+            self.assertTrue(module._reset_failed_units(units))
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [["systemctl", "is-failed", unit] for unit in units],
+        )
+
+    def test_reset_failed_units_resets_failed_unit_and_confirms(self) -> None:
+        module = __import__(
+            "tools.release.arm64_reboot_runner", fromlist=["_reset_failed_units"]
+        )
+        results = [
+            subprocess.CompletedProcess([], 0, "failed\n", ""),
+            subprocess.CompletedProcess([], 0, "", ""),
+            subprocess.CompletedProcess([], 1, "inactive\n", ""),
+        ]
+        with mock.patch.object(module, "_run", side_effect=results) as run:
+            self.assertTrue(module._reset_failed_units(("failed.service",)))
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [
+                ["systemctl", "is-failed", "failed.service"],
+                ["systemctl", "reset-failed", "failed.service"],
+                ["systemctl", "is-failed", "failed.service"],
+            ],
+        )
+
+    def test_reset_failed_units_rejects_reset_failure(self) -> None:
+        module = __import__(
+            "tools.release.arm64_reboot_runner", fromlist=["_reset_failed_units"]
+        )
+        results = [
+            subprocess.CompletedProcess([], 0, "failed\n", ""),
+            subprocess.CompletedProcess([], 1, "", "permission denied"),
+        ]
+        with mock.patch.object(module, "_run", side_effect=results):
+            self.assertFalse(module._reset_failed_units(("failed.service",)))
+
+    def test_reset_failed_units_rejects_unexplained_probe_failure(self) -> None:
+        module = __import__(
+            "tools.release.arm64_reboot_runner", fromlist=["_reset_failed_units"]
+        )
+        probe = subprocess.CompletedProcess([], 1, "", "failed to connect to bus")
+        with mock.patch.object(module, "_run", return_value=probe) as run:
+            self.assertFalse(module._reset_failed_units(("broken.service",)))
+        run.assert_called_once_with(["systemctl", "is-failed", "broken.service"])
+
     def test_cleanup_resets_failed_before_removing_unit_files(self) -> None:
         module = __import__(
             "tools.release.arm64_reboot_runner", fromlist=["_cleanup_owned"]
         )
         source = inspect.getsource(module._cleanup_owned)
-        reset_failed = source.index('["systemctl", "reset-failed"')
+        reset_failed = source.index("_reset_failed_units")
         unlink_files = source.index("path.unlink")
         daemon_reload = source.index('["systemctl", "daemon-reload"')
         self.assertLess(reset_failed, unlink_files)
