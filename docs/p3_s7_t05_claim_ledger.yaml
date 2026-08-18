@@ -1,16 +1,16 @@
-schema_version: "1.0"
+schema_version: "1.1"
 project:
   name: "Industrial-IOT-Gateway"
   local_identifier: "industrial_iot_gateway"
   document_status: "USER_APPROVED_AND_FINALIZED"
   generated_on: "2026-08-15"
-  reviewed_on: "2026-08-15"
+  reviewed_on: "2026-08-18"
 
 frozen_input:
-  repository_revision: "a1fbcdc7661c6fee61c688259ee222872a3cce87"
-  worktree_state: "clean"
-  release_scope: "Linux x86_64 软件 MVP"
-  release_state: "稳定 bundle 已验证但未创建 Git tag、未上传 GitHub Release"
+  repository_revision: "2a0c961bb9677fb3cc54b1e57be88a96cd9db82b"
+  worktree_state: "产品候选清洁；T06 文档变更经用户审核后独立固化"
+  release_scope: "Linux x86_64 + Linux ARM64 本地软件 Release"
+  release_state: "本地双架构 Release 就绪，未创建 Git tag、未上传 GitHub Release"
 
 evidence_inputs:
   - path: "docs/p3_s7_t01_release_gate_decision.md"
@@ -34,9 +34,11 @@ evidence_inputs:
   - path: "LICENSE"
     sha256: "d076e1b9a818b868168efef2ee11224cd31c5493047e8b0d4879e6be88e38b76"
   - path: "README.md"
-    sha256: "1219fcd51c5dd1153bc488dd56165e37f2d70f37028882115465b20dc680a60f"
+    sha256: "3942f454ae60174cd71ce4d6da830de6659f4c76e108ea5c7289fa45ecdd7e73"
   - path: "docs/runbook.md"
-    sha256: "6e3358e62ea011d3607dff13358d659368d1045b35d604bb8dc402536104ddbb"
+    sha256: "5d6495d94035e4ae802599bf9621b94191cb30214c00725130d330358362bdd9"
+  - path: "docs/p3_s7_t06_validation.md"
+    sha256: "f5601034de16d0384b93ea3e11b4e4b7247562906bd4bb36d43bf270f6fa1ccc"
 
 facts:
   - fact_id: "P3-F001"
@@ -154,7 +156,7 @@ facts:
       - "TSan targeted 24/24 与 full 191/191 PASS"
       - "Python 35/35 PASS"
       - "数据合同 20/20 PASS"
-    limitations: ["未执行 ARM64 8 小时长稳", "未形成 ARM64 Release bundle"]
+    limitations: ["原生构建与软件测试，不含真实 USB-RS485、STM32 或 CAN"]
 
   - fact_id: "P3-F012"
     statement: "Raspberry Pi 4B / Ubuntu Server 24.04 ARM64 的原生 PID 1/systemd 十场景验收为 10/10 PASS。"
@@ -179,22 +181,27 @@ facts:
     evidence_refs:
       - "docs/p3_s7_t01_release_gate_decision.md"
       - "docs/P3-S7-ARM64-T02_validation.md"
+      - "docs/p3_s7_t06_validation.md"
     metrics: ["hardware_validated=false", "G6=NOT_RUN_OPTIONAL"]
     limitations: ["不得声称真实硬件、物理层或工业现场验证"]
 
   - fact_id: "P3-F015"
-    statement: "ARM64 8 小时长稳尚未执行。"
-    status: "KNOWN_LIMITATION"
-    evidence_refs: ["docs/P3-S7-ARM64-T02_validation.md"]
-    metrics: ["arm64_long_soak_validated=false"]
-    limitations: ["x86_64 G4 不得替代 ARM64 长稳结论"]
+    statement: "ARM64 8 小时长稳在 P3-S7-ARM64-T02 结束时尚未执行。"
+    status: "HISTORICAL_LIMITATION_RESOLVED"
+    evidence_refs: ["docs/P3-S7-ARM64-T02_validation.md", "docs/p3_s7_t06_validation.md"]
+    metrics: ["then: arm64_long_soak_validated=false"]
+    effective_until: "2026-08-18"
+    resolved_by: "P3-F018"
+    limitations: ["仅作为阶段历史，不得描述当前能力"]
 
   - fact_id: "P3-F016"
-    statement: "ARM64 Release bundle 尚未形成或验收。"
-    status: "KNOWN_LIMITATION"
-    evidence_refs: ["docs/P3-S7-ARM64-T02_validation.md"]
-    metrics: ["arm64_release_bundle_ready=false"]
-    limitations: ["x86_64 bundle 不得扩展为多架构发布包"]
+    statement: "ARM64 Release bundle 在 P3-S7-ARM64-T02 结束时尚未形成或验收。"
+    status: "HISTORICAL_LIMITATION_RESOLVED"
+    evidence_refs: ["docs/P3-S7-ARM64-T02_validation.md", "docs/p3_s7_t06_validation.md"]
+    metrics: ["then: arm64_release_bundle_ready=false"]
+    effective_until: "2026-08-18"
+    resolved_by: "P3-F019"
+    limitations: ["仅作为阶段历史，不得描述当前能力"]
 
   - fact_id: "P3-F017"
     statement: "当前未创建正式 Git tag，也未上传 GitHub Release。"
@@ -202,8 +209,38 @@ facts:
     evidence_refs:
       - "docs/p3_s7_t01_release_gate_decision.md"
       - "docs/p3_s7_t04_validation.md"
+      - "docs/p3_s7_t06_validation.md"
     metrics: []
     limitations: ["只能表述为发布候选或 bundle ready，不能表述为已公开发布"]
+
+  - fact_id: "P3-F018"
+    statement: "Raspberry Pi 4B / Ubuntu Server 24.04 ARM64 已完成 28800 秒软件长稳和受控 systemd 重启自启演练。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s7_t06_validation.md"
+      - "run:20260815T064133Z_soak_release_2a0c961_001"
+      - "run:20260818T063221Z_reboot_2a0c961_001"
+    metrics: ["28800.677 秒", "230/230 enforced oracles PASS", "重启后观察 637.417 秒", "failures=[]"]
+    limitations: ["PTY 与本地 Mosquitto 软件验收，不含真实 RS485/CAN"]
+
+  - fact_id: "P3-F019"
+    statement: "同一产品候选已分别形成 Linux x86_64 与 Linux ARM64 的可复现 final bundle。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s7_t06_validation.md"
+      - "run:20260818T073354Z_2a0c961_001"
+      - "run:20260818T073403Z_2a0c961_001"
+    metrics: ["每包 9 个正式文件", "双归档一致", "clean smoke PASS"]
+    limitations: ["本地软件包，不代表公开发布或真实硬件验收"]
+
+  - fact_id: "P3-F020"
+    statement: "v0.1.0 已形成精确五文件的 Linux x86_64 + Linux ARM64 本地软件 Release 集。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s7_t06_validation.md"
+      - "run:20260818T074233Z_2a0c961_001"
+    metrics: ["release_status=LOCAL_RELEASE_READY", "published=false", "hardware_validated=false"]
+    limitations: ["未创建 Git tag，未上传 GitHub Release，未执行真实硬件 G6"]
 
 claims:
   - claim_id: "P3-C001"
@@ -287,13 +324,13 @@ claims:
   - claim_id: "P3-C007"
     statement: "在 Raspberry Pi 4B / Ubuntu Server 24.04 ARM64 完成原生构建和质量门，Release 完整 CTest 191/191 通过。"
     status: "VERIFIED_RESULT"
-    source_fact_ids: ["P3-F011", "P3-F015", "P3-F016"]
+    source_fact_ids: ["P3-F011"]
     evidence_refs: ["docs/p3_s7_arm64_t01_validation.md", "docs/p3_s7_arm64_t01_build_matrix.json", "run:20260814T171411Z_arm64_native_e62de0e_003"]
     metrics: ["Release CTest 191/191 PASS", "ASan/UBSan 191/191 PASS", "TSan full 191/191 PASS"]
     contribution_scope: "个人完成 ARM64 可移植性修复、原生构建与质量门执行。"
     allowed_channels: ["resume", "interview", "public_project", "private_notes"]
-    required_qualifiers: ["Raspberry Pi 4B / Ubuntu Server 24.04 ARM64", "原生构建与软件测试", "未执行 ARM64 8 小时长稳或 bundle"]
-    prohibited_wording: ["ARM64 Release ready", "ARM64 长稳通过", "树莓派硬件总线通过"]
+    required_qualifiers: ["Raspberry Pi 4B / Ubuntu Server 24.04 ARM64", "原生构建与软件测试", "不含真实 RS485/CAN"]
+    prohibited_wording: ["树莓派硬件总线通过"]
     public_safe: true
     review_status: "USER_APPROVED"
 
@@ -352,13 +389,13 @@ claims:
   - claim_id: "P3-C012"
     statement: "ARM64 已完成 8 小时长稳和 Release bundle，可作为正式 ARM64 发布。"
     status: "REJECTED_CLAIM"
-    source_fact_ids: ["P3-F015", "P3-F016"]
-    evidence_refs: ["docs/P3-S7-ARM64-T02_validation.md"]
-    metrics: ["arm64_long_soak_validated=false", "arm64_release_bundle_ready=false"]
-    contribution_scope: "未执行。"
+    source_fact_ids: ["P3-F018", "P3-F019", "P3-F017"]
+    evidence_refs: ["docs/p3_s7_t06_validation.md"]
+    metrics: ["arm64_long_soak_validated=true", "arm64_release_bundle_ready=true", "published=false"]
+    contribution_scope: "长稳和本地 bundle 已完成，但未形成公开发布。"
     allowed_channels: []
     required_qualifiers: []
-    prohibited_wording: ["ARM64 8 小时长稳 PASS", "ARM64 Release ready"]
+    prohibited_wording: ["正式 ARM64 发布", "ARM64 已公开发布"]
     public_safe: false
     review_status: "REJECTED_BY_EVIDENCE"
 
@@ -385,5 +422,31 @@ claims:
     allowed_channels: ["resume", "interview", "public_project", "private_notes"]
     required_qualifiers: ["软件证据链"]
     prohibited_wording: ["认证级测试平台", "第三方认证"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C015"
+    statement: "在 Raspberry Pi 4B / Ubuntu Server 24.04 ARM64 完成 8 小时软件长稳及受控 systemd 重启自启演练。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F018", "P3-F014"]
+    evidence_refs: ["docs/p3_s7_t06_validation.md"]
+    metrics: ["28800.677 秒", "230/230 enforced oracles PASS", "重启后观察 637.417 秒"]
+    contribution_scope: "个人实现并执行 ARM64 软件长稳、主机遥测和受控重启验收。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["Raspberry Pi 4B ARM64", "PTY/本地 Mosquitto 软件验收", "不含真实 RS485/CAN"]
+    prohibited_wording: ["真实硬件长稳", "工业现场验证", "生产级"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C016"
+    statement: "为同一候选提交形成 Linux x86_64 与 Linux ARM64 的 v0.1.0 本地双架构软件 Release 集。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F019", "P3-F020", "P3-F017", "P3-F014"]
+    evidence_refs: ["docs/p3_s7_t06_validation.md"]
+    metrics: ["2 个原生 final bundle", "每包 9 个正式文件", "精确 5 文件 Release 集"]
+    contribution_scope: "个人实现可复现打包、跨架构原生复演、哈希索引和本地 Release 组装。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["本地软件 Release", "未公开发布", "不含真实 RS485/CAN"]
+    prohibited_wording: ["GitHub Release 已发布", "正式硬件版", "工业级"]
     public_safe: true
     review_status: "USER_APPROVED"

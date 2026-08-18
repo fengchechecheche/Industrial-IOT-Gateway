@@ -2,8 +2,9 @@
 
 ## 1. 适用范围
 
-本手册适用于当前 Linux x86_64 软件候选版。树莓派 ARM64 与真实 USB-RS485 需要按同样步骤
-重新验证，不能直接继承 WSL2 结论。
+本手册适用于 v0.1.0 Linux x86_64 与 Linux ARM64 本地软件 Release。两架构均已完成原生
+软件验收；真实 USB-RS485、商用 Modbus 从站、STM32 和 CAN 仍必须执行独立 G6，不能由
+PTY、本地 Mosquitto 或树莓派软件证据替代。
 
 ## 2. 构建与安装暂存
 
@@ -14,7 +15,7 @@ cmake -S . -B build/release \
   -DGATEWAY_BUILD_PTY_SLAVE=ON \
   -DGATEWAY_ENABLE_MQTT=ON \
   -DGATEWAY_ENABLE_WARNINGS_AS_ERRORS=ON
-cmake --build build/release -j2
+cmake --build build/release -j4
 ctest --test-dir build/release --output-on-failure
 
 rm -rf /tmp/industrial_iot_gateway-stage
@@ -27,7 +28,32 @@ DESTDIR=/tmp/industrial_iot_gateway-stage cmake --install build/release
 - `usr/local/lib/systemd/system/industrial_iot_gateway.service`；
 - `usr/local/share/industrial_iot_gateway/systemd/gateway.env.example`。
 
-## 3. 主机准备
+## 3. 本地 bundle 核验与解包
+
+先选择与 `uname -m` 匹配的包：`x86_64` 使用 `linux-x86_64`，`aarch64`/`arm64` 使用
+`linux-arm64`。在五文件 Release 目录中执行：
+
+```bash
+sha256sum -c SHA256SUMS
+tar -tzf industrial_iot_gateway-0.1.0-linux-<arch>.tar.gz
+mkdir -p /tmp/industrial_iot_gateway-v0.1.0
+tar -xzf industrial_iot_gateway-0.1.0-linux-<arch>.tar.gz \
+  -C /tmp/industrial_iot_gateway-v0.1.0
+```
+
+安装前还应检查 `release_index.json` 中的版本、完整产品提交和平台字段，并确认：
+
+```text
+release_status=LOCAL_RELEASE_READY
+published=false
+hardware_validated=false
+tag=null
+```
+
+每个包的正式安装树精确为 9 个产品文件；PTY fixture、测试 runner、原始日志和临时环境
+配置不属于交付包。
+
+## 4. 主机准备
 
 ```bash
 sudo useradd --system --home /var/lib/industrial_iot_gateway \
@@ -45,7 +71,7 @@ sudo install -o root -g iot-gw -m 0640 \
 
 优先使用 `/dev/serial/by-id/...`，不要把会变化的 `/dev/ttyUSB0` 当作长期设备名。
 
-## 4. 环境配置
+## 5. 环境配置
 
 ```bash
 sudo install -o root -g iot-gw -m 0640 \
@@ -70,7 +96,7 @@ GATEWAY_MQTT_ARGS=--mqtt-broker-uri tcp://127.0.0.1:1883 --mqtt-client-id iiotgw
 
 client ID 只用不超过 23 字符的字母数字；gateway ID 可含下划线。不要把生产密码写进公开模板。
 
-## 5. 静态验证与启停
+## 6. 静态验证与启停
 
 ```bash
 sudo systemd-analyze verify /etc/systemd/system/industrial_iot_gateway.service
@@ -96,7 +122,7 @@ systemctl show industrial_iot_gateway.service \
 
 应看到 `gateway_summary`、`stopped=true`、退出 0；停止预算为 5 秒。
 
-## 6. 日常观测
+## 7. 日常观测
 
 ```bash
 journalctl -u industrial_iot_gateway.service --since today --no-pager
@@ -109,7 +135,7 @@ systemctl show industrial_iot_gateway.service \
 关注 `request_completed` 的结果分类、`mqtt_connect_failed`/reconnect、队列高水位、
 `late_response_discarded` 和最终 `gateway_summary`。服务 active 但长期无成功请求仍需排查。
 
-## 7. 分层排障
+## 8. 分层排障
 
 1. unit 无法加载：先运行 `systemd-analyze verify`，检查绝对路径和环境文件。
 2. 退出 4：寄存器表缺失或内容错误；修正配置，不应依赖自动重启。
@@ -119,14 +145,14 @@ systemctl show industrial_iot_gateway.service \
 5. 反复重启：查看 `NRestarts`、主进程退出码和 signal；不要先改成 `Restart=always`。
 6. 停止超时：检查 MQTT drain、线程 join、串口 fd 所有权和 journal 最后的结构化事件。
 
-## 8. 升级与回退
+## 9. 升级与回退
 
 升级前保存当前二进制、unit、环境文件和寄存器表的 SHA-256；先在暂存目录执行
 `cmake --install`，再停止服务、替换文件、`daemon-reload` 和启动。若新版本失败，恢复上一
 组已知哈希的文件并再次重载。环境文件可能含生产信息，不得复制到公开 evidence。
 
-## 9. 证据与权限边界
+## 10. 证据与权限边界
 
 原始长稳、journal 和 RC 文件存于已忽略的 `artifacts/soak/`、`artifacts/systemd/`、
-`artifacts/release/`。正式报告只引用去敏摘要。未经项目所有者单独授权，不执行
+`artifacts/releases/`。正式报告只引用去敏摘要。未经项目所有者单独授权，不执行
 `git add`、`git commit` 或 `git push`。

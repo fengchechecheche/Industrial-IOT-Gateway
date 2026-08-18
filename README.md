@@ -13,10 +13,17 @@
 - MQTT 可通过 `GATEWAY_ENABLE_MQTT` 独立关闭，关闭时保留原有 JSONL/PTY 路径。
 - 绑定冻结提交的 8 小时软件长稳、周期故障、资源趋势和 SHA-256 自动验收；
 - 非 root systemd unit、错误配置 fail-fast、串口缺失退避、异常重启和 CMake 安装暂存。
+- 在 VMware Ubuntu Server 24.04 x86_64 与 Raspberry Pi 4B Ubuntu Server 24.04
+  ARM64 上形成同一候选提交的 v0.1.0 本地双架构软件 Release；
+- 两个平台均通过原生 Release 构建、完整 CTest、确定性双归档、清洁解包、
+  PTY/Mosquitto 演示、SIGTERM 和卸载复演；
+- Raspberry Pi 4B ARM64 已通过 8 小时软件长稳与受控 systemd 重启自启演练。
 
-当前不包含 MQTT 下行写寄存器、TLS/生产凭据、ARM64/树莓派、真实 USB-RS485/STM32
-硬件验收或生产发行结论。WSL2 systemd 与 PTY 软件证据不能替代目标机和电气层复验。
-部署与排障命令见 `docs/runbook.md`。
+当前已验证 Linux x86_64 与 Raspberry Pi 4B ARM64 的软件构建、测试、systemd、长稳和
+本地 bundle，但未创建 Git tag、未上传 GitHub Release，也未执行真实 USB-RS485、商用
+Modbus 从站、STM32 或 CAN 硬件 G6。PTY/Mosquitto 软件证据不能替代 RS485/CAN 电气层和
+真实传感器复验。当前也不包含 MQTT 下行写寄存器、TLS 或生产凭据。部署与排障命令见
+`docs/runbook.md`。
 
 ## 构建与测试
 
@@ -83,6 +90,24 @@ PTY、broker 断线/恢复和有界停止场景。成功输出包含 `DEMO_RESUL
 这只是 Linux x86_64 上的软件集成演示，不代表树莓派、ARM64、systemd 稳定版门、真实
 USB-RS485、STM32、CAN 或 RS485 电气层已经验证。演示只清理由本次命令创建的进程，不会按
 进程名停止用户已有的 broker。
+
+## 本地双架构 Release
+
+v0.1.0 本地 Release 集包含 Linux x86_64 与 Linux ARM64 两个软件包。两个包绑定同一产品
+候选提交，并分别在原生平台完成构建、测试、确定性归档和 clean smoke。使用前应先验证
+`SHA256SUMS`，再选择与 `uname -m` 匹配的软件包；详细步骤见 `docs/runbook.md`。
+
+Release 资产保存在项目规划产物目录，不把原始 evidence、私有主机路径或测试凭据提交到
+公共仓库。当前发布边界固定为：
+
+```text
+PUBLISHED=false
+HARDWARE_VALIDATED=false
+TAG=null
+```
+
+这表示本地双架构软件 Release 已就绪，但没有创建 Git tag 或 GitHub Release，也没有完成
+真实 USB-RS485、商用 Modbus 从站、STM32 或 CAN 硬件验收。
 
 Sanitizer 构建：
 
