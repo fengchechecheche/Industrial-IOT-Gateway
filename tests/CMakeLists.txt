@@ -60,6 +60,16 @@ set_tests_properties(
 )
 
 add_test(
+  NAME release_local_dual_arch_release_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest
+          tests/release/test_local_dual_arch_release_contract.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  release_local_dual_arch_release_unit PROPERTIES LABELS "unit;release;bundle" TIMEOUT 20
+)
+
+add_test(
   NAME release_arm64_reboot_runner_unit
   COMMAND "${Python3_EXECUTABLE}" -m unittest tests/release/test_arm64_reboot_runner.py
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
