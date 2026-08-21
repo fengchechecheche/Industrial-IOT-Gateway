@@ -63,27 +63,57 @@ candleLight USB-CAN 同时挂载到 `Ubuntu-24.04-Gateway`。项目三继续使�
 业务程序。`can0` 明确配置为 500 kbit/s、Host sample point `0.75`、公共 GND 和 USB-CAN
 `120R`，准入时为 ERROR-ACTIVE 且统计全零。
 
-125 秒正式并发轮次和随后 25 秒聚焦确认得到：
+125 秒正式并发轮次和随后 25 秒聚焦确认完成 2060/2060 次 Modbus 请求，失败 0，覆盖全部
+17 个输入寄存器地址；六种 CAN 周期 ID 同时持续出现。该轮使用的临时 Host 发送片段在收到
+`0x541` 后立即关闭 raw CAN socket，曾出现一次 error-warning，因此不作为最终 CAN 诊断工具。
 
-- 项目三在 CAN 周期遥测同时存在时完成 2060/2060 次 Modbus 请求，失败 0，覆盖全部
-  17 个输入寄存器地址；
-- 六种 CAN 周期 ID 持续出现；并发轮询期间发送四个不同 sequence/nonce 的 Host-owned
-  `0x540` 请求，均收到唯一匹配的 STM32-owned `0x541` 应答；
-- `can0` RX 从 738 增至 2228，Host TX 恰为 4；结束时仍为 ERROR-ACTIVE，bus-error、
-  error-passive 和 bus-off 计数均为 0；
-- 正式轮次出现一次 error-warning 状态转换，但未伴随 Modbus 失败或可见链路中断；随后
-  25 秒内该计数保持为 1，没有再次增长。
+随后进行的十分钟复验完成 8291/8291 次 Modbus 请求，失败 0。前五分钟只被动接收 CAN，
+warning、passive 和 bus-off 均保持为 0；在使用同类临时短生命周期 sender 发送一个有效
+`0x540` 后，虽然收到了唯一正确 `0x541`，Host 状态计数仍升至 8 warning、33 passive 和
+210 bus-off，停止主动发送后不再增长，Modbus 和 CAN 周期 RX 继续推进。
 
-因此可以声明“指定 WSL x86_64 Gateway 环境与项目五节点完成了约 150 秒真实 RS485/CAN
-并发和四次有界 CAN 诊断往返”。不能改写为全程零 warning，也不能据此声明项目三应用层
-已经消费、解析或发布 CAN 数据。成功原始 JSONL 在形成摘要后已删除。
+上述早期 A/B 现象一度支持“短生命周期 sender 与关闭时序相关”的候选假设，但后续 T1～T4
+十分钟矩阵推翻了把 socket 关闭视为必要条件的结论：单一长驻 socket、监控 socket 加第二个
+全程长驻 socket、逐次创建并立即关闭 sender，以及发送后延迟 5 秒关闭 sender，四种模式均可
+出现 CAN 错误帧或状态计数增长。因而当前证据只支持异常与本台架的 Host 主动 CAN 路径相关，
+不能把精确根因唯一归给 socket 生命周期、candleLight、`gs_usb`、USB-IP、项目五固件或某个
+单独组件。
 
-## 5. 保留边界
+T5 随后将产品范围收敛为“RS485 主动双向轮询 + CAN 被动遥测”，持续约 600 秒并通过：项目三
+Modbus 请求 8768 次成功、失败 0；六种周期 CAN ID 各收到 610 帧；专用错误帧为 0，warning、
+passive、bus-off 计数均无增长，Host 主动 CAN TX 为 0。该结果证明产品范围的双总线并发成立，
+不证明 Host→STM32 CAN 应用请求可靠。项目三当前仍只在应用层处理 Modbus；CAN 观察由 Gateway
+环境中的独立 SocketCAN 工具完成。T1～T5 的权威明细见项目五
+`docs/can_socket_lifecycle_matrix.md`，成功原始 JSONL 在形成摘要后已删除。
 
-- 本轮不是 Raspberry Pi 4B/ARM64 实物 RS485 验收；
+## 5. Raspberry Pi 4B/ARM64 实物补验
+
+2026-08-22 在物理 Raspberry Pi 4B（Ubuntu 24.04.4、AArch64）上使用项目三 `[040]
+b28191e0e4a179bb9bcdb245a73d272a70a6c73b`、既有 ARM64 发布包和地址 4 只读 profile，连接
+同一新 CH340 与 candleLight USB-CAN；项目五为 `[069]
+2789d740e37da6cce4c641a7838fc28ad2b80b84`，默认 Debug ELF SHA-256 仍为
+`d076ddf743020fe1a043e776ba3196ea1f02153a17c5d98451cc722d6ac0018f`。
+
+三条有界路线均通过：
+
+- JSONL/RESET：约 182.723 秒内 2510/2510 次 Modbus 请求成功，2510 条 telemetry 有效；
+  运行中人工复位 NUCLEO 后继续读取，串口只打开一次并有界停止；
+- 本地 MQTT：修正一个不合约的 MQTT client ID 后，约 82.233 秒内 1140/1140 次 Modbus
+  请求成功，发布成功 1143、失败 0；本机订阅器收到 1140 条消息并覆盖 17 个 topic；
+- 双总线：约 208.691 秒内 2860/2860 次 Modbus 请求成功，六种 CAN 周期 ID 各收到 213 帧，
+  最大周期帧间隔约 0.983 秒；专用错误帧为 0，CAN warning/passive/bus-off 和 RX drop 增量
+  均为 0，Host CAN TX 为 0。
+
+MQTT 首次尝试使用了超过项目三约束且含连字符的 client ID，网关在启动准入阶段拒绝运行；改为
+合约内的 `p5p3rpi0822` 后通过。该次失败属于配置准入，不属于 RS485、STM32 或 MQTT 传输故障。
+
+## 6. 保留边界
+
 - 未连接商用 TAS-WS-R00020 或多个真实从站；
-- Gateway WSL 已完成 SocketCAN 实物补验，但项目三应用层尚未实现 CAN 数据消费；仍未执行
-  Raspberry Pi CAN、完整电气安全、隔离、EMC、重复断线或硬件长稳；
+- Raspberry Pi 已完成本地 JSONL、一次 RESET、本地 MQTT 和“RS485 主动 + CAN 被动”短时补验，
+  但项目三应用层尚未实现 CAN 数据消费；仍未执行生产 systemd 部署、远程/TLS MQTT、完整
+  电气安全、隔离、EMC、重复断线或硬件长稳；
+- Host→STM32 CAN 主动应用通信因 T1～T4 异常保持排除，不由本报告声明通过；
 - 未执行地址 4→5→4 写入，项目五 H08/H09 继续为 `NOT_RUN_BY_POLICY`；
 - 原始 JSONL/MQTT 日志在成功摘要形成后已删除，没有建立逐帧证据包；
 - 项目三整体继续保持 `PUBLISHED=false`、`HARDWARE_VALIDATED=false`、`TAG=null`。
