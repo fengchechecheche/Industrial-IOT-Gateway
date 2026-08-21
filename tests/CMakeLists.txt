@@ -242,6 +242,7 @@ target_compile_definitions(
   gateway_runtime_unit_test
   PRIVATE
     GATEWAY_REGISTER_MAP_PATH="${CMAKE_SOURCE_DIR}/config/examples/register_map.yaml"
+    GATEWAY_STM32_ADDRESS4_MAP_PATH="${CMAKE_SOURCE_DIR}/config/hardware/stm32_node_address4.yaml"
     GATEWAY_INVALID_REGISTER_MAP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/invalid_register_map.yaml"
 )
 gateway_enable_clang_tidy(gateway_runtime_unit_test)
