@@ -79,6 +79,45 @@ set_tests_properties(
 )
 
 add_test(
+  NAME hardware_g6_t03_contract_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/hardware/test_g6_t03_contract.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  hardware_g6_t03_contract_unit PROPERTIES LABELS "unit;hardware;g6;system" TIMEOUT 20
+)
+
+add_test(
+  NAME hardware_g6_t03_runner_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/hardware/test_g6_t03_runner.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  hardware_g6_t03_runner_unit PROPERTIES LABELS "unit;hardware;g6;system" TIMEOUT 20
+)
+
+add_test(
+  NAME hardware_g6_t03_reboot_controller_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest
+          tests/hardware/test_g6_t03_reboot_controller.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  hardware_g6_t03_reboot_controller_unit
+  PROPERTIES LABELS "unit;hardware;g6;system;arm64" TIMEOUT 20
+)
+
+add_test(
+  NAME hardware_g6_t03_preflight_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/hardware/test_g6_t03_preflight.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  hardware_g6_t03_preflight_unit
+  PROPERTIES LABELS "unit;hardware;g6;system;arm64" TIMEOUT 20
+)
+
+add_test(
   NAME soak_profile_contract
   COMMAND "${Python3_EXECUTABLE}" -m unittest tests/soak/test_soak_profile.py
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

@@ -1,0 +1,48 @@
+{
+  "schema_version": "p3-s7-g6-t03-profile-v1",
+  "task_id": "P3-S7-G6-T03",
+  "systemd_unit": "industrial_iot_gateway.service",
+  "serial": {
+    "path": "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0",
+    "baud": 19200,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1,
+    "minimum_request_interval_ms": 200
+  },
+  "devices": [
+    {"slave_id": 1, "device_name": "tas_env_01"},
+    {"slave_id": 2, "device_name": "tas_env_02"},
+    {"slave_id": 4, "device_name": "stm32_condition_node"}
+  ],
+  "thresholds": {
+    "normal_success_rate_min": 0.999,
+    "non_target_max_success_gap_ms": 10000,
+    "recovery_timeout_ms": 120000,
+    "ssh_recovery_timeout_ms": 300000,
+    "shutdown_timeout_ms": 5000,
+    "post_reboot_observation_ms": 600000,
+    "temperature_max_c": 80.0,
+    "evidence_max_bytes": 5368709120,
+    "minimum_disk_free_bytes": 16106127360
+  },
+  "scenario_ids": [
+    "t03_f01_tas_a_cycle_2",
+    "t03_f01_tas_a_cycle_3",
+    "t03_f02_tas_b_cycle_2",
+    "t03_f02_tas_b_cycle_3",
+    "t03_f03_stm32_reset_1",
+    "t03_f03_stm32_reset_2",
+    "t03_f03_stm32_reset_3",
+    "t03_f04_mosquitto_1",
+    "t03_f04_mosquitto_2",
+    "t03_f04_mosquitto_3",
+    "t03_f05_usb_rs485_1",
+    "t03_f05_usb_rs485_2",
+    "t03_f05_usb_rs485_3",
+    "t03_f06_sigterm_1",
+    "t03_f06_sigterm_2",
+    "t03_f06_sigterm_3",
+    "t03_f07_reboot"
+  ]
+}
