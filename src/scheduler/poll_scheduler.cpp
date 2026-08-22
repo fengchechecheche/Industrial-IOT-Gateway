@@ -234,6 +234,11 @@ SchedulerTransition PollScheduler::record_attempt_result(const AttemptResult &re
                         result.request_id};
     return transition;
   }
+  if (active.request.state == RequestState::queued &&
+      result.category == RequestResultCategory::deadline_exceeded &&
+      result.observed_at >= active.request.deadline) {
+    return process_attempt_result(result);
+  }
   if (active.request.state != RequestState::waiting_response || !active.sent_at.has_value() ||
       !active.attempt_deadline.has_value()) {
     SchedulerTransition transition{};
@@ -287,6 +292,17 @@ PollScheduler::on_time_advanced(SchedulerTimePoint now) noexcept {
 
 bool PollScheduler::has_in_flight_request() const noexcept {
   return in_flight_job_index_.has_value();
+}
+
+std::optional<RequestState> PollScheduler::in_flight_request_state() const noexcept {
+  if (!in_flight_job_index_.has_value()) {
+    return std::nullopt;
+  }
+  const auto &state = jobs_[*in_flight_job_index_];
+  if (!state.active.has_value()) {
+    return std::nullopt;
+  }
+  return state.active->request.state;
 }
 
 std::optional<SchedulerTimePoint> PollScheduler::next_due_time() const noexcept {

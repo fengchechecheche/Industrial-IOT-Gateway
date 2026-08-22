@@ -400,9 +400,10 @@ private:
 
         const auto now = RuntimeClock::now();
         const auto next_wake = poll_scheduler.next_wake_time();
+        const auto in_flight_state = poll_scheduler.in_flight_request_state();
         const auto feedback_grace = config.late_response_guard + kMaximumLateResponseTransfer +
                                     kSchedulerFeedbackJitterGrace;
-        if (poll_scheduler.has_in_flight_request() && next_wake.has_value() &&
+        if (in_flight_state == scheduler::RequestState::waiting_response && next_wake.has_value() &&
             now >= *next_wake + feedback_grace) {
           auto advanced = poll_scheduler.on_time_advanced(now);
           if (!advanced.has_value()) {
@@ -433,7 +434,7 @@ private:
         }
 
         auto wake_at = now + std::chrono::milliseconds(50);
-        if (next_wake.has_value()) {
+        if (next_wake.has_value() && in_flight_state != scheduler::RequestState::queued) {
           const auto scheduled_wake =
               poll_scheduler.has_in_flight_request() ? *next_wake + feedback_grace : *next_wake;
           wake_at = std::min(wake_at, scheduled_wake);
@@ -867,6 +868,19 @@ private:
           continue;
         }
         const auto attempt_started = RuntimeClock::now();
+        if (request.request_kind == scheduler::RequestKind::poll_read &&
+            attempt_started >= request.deadline) {
+          log("request_expired_before_send", "serial", observability::LogSeverity::warning,
+              &request, scheduler::RequestResultCategory::deadline_exceeded);
+          scheduler::AttemptResult expired{};
+          expired.request_id = request.request_id;
+          expired.poll_job_id = request.poll_job_id;
+          expired.attempt = request.attempt;
+          expired.category = scheduler::RequestResultCategory::deadline_exceeded;
+          expired.observed_at = attempt_started;
+          static_cast<void>(submit_scheduler_feedback(expired, request));
+          continue;
+        }
         previous_request_started_at = attempt_started;
         if (request.request_kind == scheduler::RequestKind::poll_read) {
           if (!submit_scheduler_feedback(AttemptSentFeedback{request.request_id,

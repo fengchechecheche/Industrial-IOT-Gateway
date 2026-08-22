@@ -137,6 +137,29 @@ TEST(PollSchedulerReliabilityTest, RequestDeadlineTruncatesResponseWait) {
   EXPECT_EQ(scheduler.slave_statistics(1U).deadline_exceeded, 1U);
 }
 
+TEST(PollSchedulerReliabilityTest, AcceptsDeadlineExceededBeforeQueuedRetryIsSent) {
+  PollScheduler scheduler({make_job(1U, 1U)}, at(0ms));
+  const auto first = require_value(scheduler.dispatch_next(at(0ms)));
+  mark_sent(scheduler, first, at(0ms));
+  const auto first_failure =
+      finish(scheduler, first, RequestResultCategory::response_timeout, at(500ms));
+  ASSERT_EQ(first_failure.retry_at, at(700ms));
+
+  const auto retry = require_value(scheduler.dispatch_next(at(4900ms)));
+  ASSERT_EQ(retry.attempt, 2U);
+  ASSERT_EQ(retry.state, RequestState::queued);
+
+  const auto expired =
+      finish(scheduler, retry, RequestResultCategory::deadline_exceeded, at(5000ms));
+  EXPECT_EQ(expired.error.category, SchedulerErrorCategory::none);
+  EXPECT_TRUE(expired.occurred);
+  EXPECT_TRUE(expired.terminal);
+  EXPECT_EQ(expired.next_state, RequestState::failed);
+  EXPECT_EQ(expired.result, RequestResultCategory::deadline_exceeded);
+  EXPECT_FALSE(scheduler.has_in_flight_request());
+  EXPECT_EQ(scheduler.slave_statistics(1U).deadline_exceeded, 1U);
+}
+
 TEST(PollSchedulerReliabilityTest, ThreeFinalFailuresEnterOfflineAndProbeTwiceToRecover) {
   auto config = single_attempt_policy();
   PollScheduler scheduler({make_job(1U, 1U, 100ms)}, at(0ms), config);

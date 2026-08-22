@@ -96,6 +96,7 @@ public:
   on_time_advanced(SchedulerTimePoint now) noexcept;
 
   [[nodiscard]] bool has_in_flight_request() const noexcept;
+  [[nodiscard]] std::optional<RequestState> in_flight_request_state() const noexcept;
   [[nodiscard]] std::optional<SchedulerTimePoint> next_due_time() const noexcept;
   [[nodiscard]] std::optional<SchedulerTimePoint> next_wake_time() const noexcept;
   [[nodiscard]] const SlavePollStatistics &slave_statistics(std::uint8_t slave_id) const noexcept;

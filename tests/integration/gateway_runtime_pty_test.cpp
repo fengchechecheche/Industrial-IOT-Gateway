@@ -179,6 +179,42 @@ TEST(GatewayRuntimePtyTest, EnforcesConfiguredMinimumRequestStartInterval) {
   EXPECT_TRUE(runtime.statistics().stopped);
 }
 
+TEST(GatewayRuntimePtyTest, ExpiresQueuedRetryBeforeSerialSendWithoutStoppingRuntime) {
+  PtyBusHarness bus(kRegisterMap, kScenarioMap);
+  ASSERT_TRUE(bus.start()) << bus.last_error();
+  ASSERT_TRUE(bus.set_fault(1U, FaultPlan{FaultMode::silent}));
+
+  std::ostringstream evidence;
+  auto config = runtime_config_for(bus.gateway_path());
+  config.response_timeout = std::chrono::milliseconds(80);
+  config.minimum_request_interval = std::chrono::milliseconds(800);
+  config.scheduler_policy.reliability.response_timeout = std::chrono::milliseconds(80);
+  config.scheduler_policy.reliability.max_attempts = 2U;
+  config.scheduler_policy.reliability.backoff_initial = std::chrono::milliseconds(20);
+  config.scheduler_policy.reliability.backoff_max = std::chrono::milliseconds(20);
+  config.scheduler_policy.reliability.request_deadline = std::chrono::milliseconds(350);
+  GatewayRuntime runtime(std::move(config), evidence);
+  ASSERT_TRUE(runtime.valid());
+  ASSERT_TRUE(runtime.start());
+
+  ASSERT_TRUE(wait_until(
+      [&runtime] {
+        const auto statistics = runtime.statistics();
+        return statistics.requests_failed > 0U || statistics.scheduler_transition_errors > 0U;
+      },
+      std::chrono::seconds(3)))
+      << evidence.str();
+  const auto observed = runtime.statistics();
+  EXPECT_EQ(observed.scheduler_transition_errors, 0U) << evidence.str();
+  EXPECT_TRUE(observed.running) << evidence.str();
+  EXPECT_NE(evidence.str().find("request_expired_before_send"), std::string::npos)
+      << evidence.str();
+
+  runtime.request_stop(ShutdownReason::service_stop);
+  runtime.join();
+  EXPECT_TRUE(runtime.statistics().stopped);
+}
+
 struct FaultCase {
   const char *name;
   FaultPlan plan;
