@@ -132,6 +132,21 @@ RuntimeConfigLoadResult load_runtime_configuration(const std::string &register_m
     }
 
     auto configuration = std::make_unique<RuntimeConfiguration>();
+    if (const auto protocol_contract = root["protocol_contract"]) {
+      if (!protocol_contract.IsMap()) {
+        return failure(RuntimeConfigErrorCategory::invalid_schema,
+                       "protocol_contract must be a mapping");
+      }
+      if (const auto interval = protocol_contract["minimum_request_interval_ms"]) {
+        const auto interval_ms = interval.as<std::uint32_t>();
+        constexpr std::uint32_t maximum_interval_ms = 10000U;
+        if (interval_ms > maximum_interval_ms) {
+          return failure(RuntimeConfigErrorCategory::invalid_schema,
+                         "minimum_request_interval_ms exceeds 10000");
+        }
+        configuration->minimum_request_interval = std::chrono::milliseconds(interval_ms);
+      }
+    }
     std::array<bool, 248U> seen_slaves{};
     std::uint32_t next_poll_job_id = 1U;
     for (const auto &device : root["devices"]) {

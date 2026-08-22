@@ -181,6 +181,89 @@ TEST(RuntimeConfigTest, DecodesStm32Address4RepresentativeValues) {
   EXPECT_DOUBLE_EQ(decoded_illuminance.value.value_or(0.0), 12.345);
 }
 
+TEST(RuntimeConfigTest, LoadsTasDualAndStm32HardwareProfile) {
+  using namespace std::chrono_literals;
+  const auto loaded = load_runtime_configuration(GATEWAY_TAS_DUAL_STM32_MAP_PATH);
+
+  ASSERT_TRUE(loaded) << loaded.detail;
+  ASSERT_NE(loaded.configuration, nullptr);
+  EXPECT_EQ(loaded.configuration->device_count, 3U);
+  ASSERT_EQ(loaded.configuration->registers.size(), 21U);
+  ASSERT_EQ(loaded.configuration->poll_jobs.size(), 21U);
+  ASSERT_EQ(loaded.configuration->freshness.size(), 21U);
+  EXPECT_EQ(loaded.configuration->minimum_request_interval, 200ms);
+
+  struct TasExpectation {
+    std::uint32_t poll_job_id;
+    std::uint8_t slave_id;
+    std::string_view device_name;
+    std::string_view register_name;
+    std::uint16_t address;
+    RegisterDataType data_type;
+    std::string_view unit;
+  };
+  constexpr std::array expectations{
+      TasExpectation{1U, 1U, "tas_env_01", "relative_humidity", 0U, RegisterDataType::uint16,
+                     "percent_rh"},
+      TasExpectation{2U, 1U, "tas_env_01", "ambient_temperature", 1U, RegisterDataType::int16,
+                     "degC"},
+      TasExpectation{3U, 2U, "tas_env_02", "relative_humidity", 0U, RegisterDataType::uint16,
+                     "percent_rh"},
+      TasExpectation{4U, 2U, "tas_env_02", "ambient_temperature", 1U, RegisterDataType::int16,
+                     "degC"},
+  };
+
+  for (const auto &expected : expectations) {
+    const auto *definition = loaded.configuration->find_register(expected.poll_job_id);
+    ASSERT_NE(definition, nullptr);
+    EXPECT_EQ(definition->slave_id, expected.slave_id);
+    EXPECT_EQ(definition->device_name, expected.device_name);
+    EXPECT_EQ(definition->register_name, expected.register_name);
+    EXPECT_EQ(definition->function, protocol::FunctionCode::read_holding_registers);
+    EXPECT_EQ(definition->address, expected.address);
+    EXPECT_EQ(definition->register_count, 1U);
+    EXPECT_EQ(definition->data_type, expected.data_type);
+    EXPECT_DOUBLE_EQ(definition->scale, 0.1);
+    EXPECT_DOUBLE_EQ(definition->offset, 0.0);
+    EXPECT_EQ(definition->unit, expected.unit);
+    EXPECT_EQ(definition->freshness, 12000ms);
+    EXPECT_EQ(loaded.configuration->poll_jobs[expected.poll_job_id - 1U].poll_period, 4000ms);
+    EXPECT_EQ(definition->topic, "industrial_iot_gateway/devices/" +
+                                     std::string(expected.device_name) + "/registers/" +
+                                     std::string(expected.register_name));
+  }
+
+  const auto *humidity = loaded.configuration->find_register(1U);
+  ASSERT_NE(humidity, nullptr);
+  const auto decoded_humidity = decode_engineering_value(*humidity, {0x0292U});
+  ASSERT_TRUE(decoded_humidity);
+  EXPECT_DOUBLE_EQ(decoded_humidity.value.value_or(0.0), 65.8);
+
+  const auto *temperature = loaded.configuration->find_register(2U);
+  ASSERT_NE(temperature, nullptr);
+  const auto decoded_temperature = decode_engineering_value(*temperature, {0xFF9BU});
+  ASSERT_TRUE(decoded_temperature);
+  EXPECT_DOUBLE_EQ(decoded_temperature.value.value_or(0.0), -10.1);
+
+  const auto *stm32_signature = loaded.configuration->find_register(5U);
+  ASSERT_NE(stm32_signature, nullptr);
+  EXPECT_EQ(stm32_signature->slave_id, 4U);
+  EXPECT_EQ(stm32_signature->device_name, "stm32_condition_node");
+  EXPECT_EQ(stm32_signature->register_name, "device_signature");
+
+  double offered_requests_per_second = 0.0;
+  for (const auto &job : loaded.configuration->poll_jobs) {
+    offered_requests_per_second += 1000.0 / static_cast<double>(job.poll_period.count());
+    if (job.request.slave_id == 4U) {
+      EXPECT_EQ(job.poll_period, 6000ms);
+      const auto *definition = loaded.configuration->find_register(job.poll_job_id);
+      ASSERT_NE(definition, nullptr);
+      EXPECT_EQ(definition->freshness, 18000ms);
+    }
+  }
+  EXPECT_LE(offered_requests_per_second, 4.0);
+}
+
 TEST(RuntimeConfigTest, DecodesSignedScaledFloatAndUint32Values) {
   RuntimeRegisterDefinition signed_value{};
   signed_value.data_type = RegisterDataType::int16;

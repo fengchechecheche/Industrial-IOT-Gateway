@@ -164,6 +164,8 @@ public:
     }
     if (config.response_timeout.count() <= 0 || config.late_response_guard.count() <= 0 ||
         config.late_response_guard > std::chrono::seconds(1) ||
+        config.minimum_request_interval.count() < 0 ||
+        config.minimum_request_interval > std::chrono::seconds(10) ||
         config.serial_reopen_backoff.count() <= 0) {
       error = RuntimeErrorCategory::invalid_timing;
       return;
@@ -657,6 +659,7 @@ private:
   void serial_loop() noexcept {
     transport::SerialPort serial;
     try {
+      std::optional<RuntimeTimePoint> previous_request_started_at{};
       while (true) {
         auto popped =
             request_queue.wait_pop_until(RuntimeClock::now() + std::chrono::milliseconds(50));
@@ -673,11 +676,30 @@ private:
         if (stop_requested.load()) {
           continue;
         }
-        if (request.request_kind == scheduler::RequestKind::poll_read) {
-          static_cast<void>(scheduler_feedback.try_push(AttemptSentFeedback{
-              request.request_id, request.poll_job_id, request.attempt, RuntimeClock::now()}));
+        if (previous_request_started_at.has_value() &&
+            config.minimum_request_interval.count() > 0) {
+          const auto earliest_start =
+              *previous_request_started_at + config.minimum_request_interval;
+          while (!stop_requested.load()) {
+            const auto now = RuntimeClock::now();
+            if (now >= earliest_start) {
+              break;
+            }
+            const auto remaining = earliest_start - now;
+            std::this_thread::sleep_for(std::min(
+                remaining,
+                std::chrono::duration_cast<RuntimeClock::duration>(std::chrono::milliseconds(10))));
+          }
+        }
+        if (stop_requested.load()) {
+          continue;
         }
         const auto attempt_started = RuntimeClock::now();
+        previous_request_started_at = attempt_started;
+        if (request.request_kind == scheduler::RequestKind::poll_read) {
+          static_cast<void>(scheduler_feedback.try_push(AttemptSentFeedback{
+              request.request_id, request.poll_job_id, request.attempt, attempt_started}));
+        }
         const auto outcome = execute_request(serial, request);
         const auto observed_at = RuntimeClock::now();
         const auto duration_ms = static_cast<std::uint64_t>(

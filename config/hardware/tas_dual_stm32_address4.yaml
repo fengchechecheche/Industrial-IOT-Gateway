@@ -1,0 +1,494 @@
+schema_version: "1.0.0"
+
+document:
+  project: "industrial_iot_gateway"
+  task_id: "P3-S7-G6-T02"
+  title: "TAS dual environment sensors and STM32 address 4 hardware profile"
+  status: "candidate"
+  document_date: "2026-08-22"
+
+protocol_contract:
+  mode: "modbus_rtu"
+  role: "master"
+  serial_profile: "19200_8E1"
+  address_model: "zero_based"
+  byte_order: "big_endian"
+  default_word_order: "high_word_first"
+  writes_enabled: false
+  minimum_request_interval_ms: 200
+
+devices:
+  - slave_id: 1
+    name: "tas_env_01"
+    description: "TAS-WS-R00020 temperature and humidity sensor A"
+    enabled: true
+
+    registers:
+      - name: "relative_humidity"
+        description: "TAS relative humidity"
+        function: "0x03"
+        address: 0
+        display_reference: "40001"
+        data_type: "uint16"
+        register_count: 1
+        scale: 0.1
+        offset: 0.0
+        unit: "percent_rh"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/tas_env_01/registers/relative_humidity"
+          publish_policy: "telemetry_with_quality"
+        raw_limits:
+          min: 0
+          max: 1000
+        engineering_limits:
+          min: 0.0
+          max: 100.0
+        poll:
+          enabled: true
+          poll_period_ms: 4000
+          freshness_ms: 12000
+
+      - name: "ambient_temperature"
+        description: "TAS signed ambient temperature"
+        function: "0x03"
+        address: 1
+        display_reference: "40002"
+        data_type: "int16"
+        register_count: 1
+        scale: 0.1
+        offset: 0.0
+        unit: "degC"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/tas_env_01/registers/ambient_temperature"
+          publish_policy: "telemetry_with_quality"
+        engineering_limits:
+          min: -40.0
+          max: 60.0
+        poll:
+          enabled: true
+          poll_period_ms: 4000
+          freshness_ms: 12000
+
+  - slave_id: 2
+    name: "tas_env_02"
+    description: "TAS-WS-R00020 temperature and humidity sensor B"
+    enabled: true
+
+    registers:
+      - name: "relative_humidity"
+        description: "TAS relative humidity"
+        function: "0x03"
+        address: 0
+        display_reference: "40001"
+        data_type: "uint16"
+        register_count: 1
+        scale: 0.1
+        offset: 0.0
+        unit: "percent_rh"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/tas_env_02/registers/relative_humidity"
+          publish_policy: "telemetry_with_quality"
+        raw_limits:
+          min: 0
+          max: 1000
+        engineering_limits:
+          min: 0.0
+          max: 100.0
+        poll:
+          enabled: true
+          poll_period_ms: 4000
+          freshness_ms: 12000
+
+      - name: "ambient_temperature"
+        description: "TAS signed ambient temperature"
+        function: "0x03"
+        address: 1
+        display_reference: "40002"
+        data_type: "int16"
+        register_count: 1
+        scale: 0.1
+        offset: 0.0
+        unit: "degC"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/tas_env_02/registers/ambient_temperature"
+          publish_policy: "telemetry_with_quality"
+        engineering_limits:
+          min: -40.0
+          max: 60.0
+        poll:
+          enabled: true
+          poll_period_ms: 4000
+          freshness_ms: 12000
+  - slave_id: 4
+    name: "stm32_condition_node"
+    description: "P5 STM32 condition-monitoring node; read-only integration profile"
+    enabled: true
+
+    registers:
+      - name: "device_signature"
+        description: "P5 register-map signature"
+        function: "0x04"
+        address: 0
+        display_reference: "30001"
+        data_type: "uint16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "raw"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/device_signature"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "register_image_generation"
+        description: "Atomic register-image generation"
+        function: "0x04"
+        address: 8
+        display_reference: "30009"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 1.0
+        offset: 0.0
+        unit: "count"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/register_image_generation"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "source_value_present_mask"
+        description: "Four-source value-present bit mask"
+        function: "0x04"
+        address: 12
+        display_reference: "30013"
+        data_type: "uint16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "bitmask"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/source_value_present_mask"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "bme280_temperature"
+        description: "BME280 compensated temperature"
+        function: "0x04"
+        address: 18
+        display_reference: "30019"
+        data_type: "int32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 0.01
+        offset: 0.0
+        unit: "degC"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/bme280_temperature"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "bme280_pressure"
+        description: "BME280 compensated pressure"
+        function: "0x04"
+        address: 20
+        display_reference: "30021"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 0.001
+        offset: 0.0
+        unit: "kPa"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/bme280_pressure"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "bme280_humidity"
+        description: "BME280 compensated relative humidity"
+        function: "0x04"
+        address: 22
+        display_reference: "30023"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 0.001
+        offset: 0.0
+        unit: "percent_rh"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/bme280_humidity"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "veml7700_illuminance"
+        description: "VEML7700 bounded illuminance result"
+        function: "0x04"
+        address: 24
+        display_reference: "30025"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 0.001
+        offset: 0.0
+        unit: "lux"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/veml7700_illuminance"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "adxl345_acceleration_x"
+        description: "ADXL345 X-axis acceleration"
+        function: "0x04"
+        address: 26
+        display_reference: "30027"
+        data_type: "int32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 0.001
+        offset: 0.0
+        unit: "g"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/adxl345_acceleration_x"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "adxl345_acceleration_y"
+        description: "ADXL345 Y-axis acceleration"
+        function: "0x04"
+        address: 28
+        display_reference: "30029"
+        data_type: "int32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 0.001
+        offset: 0.0
+        unit: "g"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/adxl345_acceleration_y"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "adxl345_acceleration_z"
+        description: "ADXL345 Z-axis acceleration"
+        function: "0x04"
+        address: 30
+        display_reference: "30031"
+        data_type: "int32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 0.001
+        offset: 0.0
+        unit: "g"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/adxl345_acceleration_z"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "adxl345_resultant_rms"
+        description: "ADXL345 resultant vibration RMS"
+        function: "0x04"
+        address: 50
+        display_reference: "30051"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 0.001
+        offset: 0.0
+        unit: "g"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/adxl345_resultant_rms"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "bme280_sequence"
+        description: "BME280 sample sequence"
+        function: "0x04"
+        address: 56
+        display_reference: "30057"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 1.0
+        offset: 0.0
+        unit: "count"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/bme280_sequence"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "veml7700_sequence"
+        description: "VEML7700 sample sequence"
+        function: "0x04"
+        address: 66
+        display_reference: "30067"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 1.0
+        offset: 0.0
+        unit: "count"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/veml7700_sequence"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "adxl345_sample_sequence"
+        description: "ADXL345 sample sequence"
+        function: "0x04"
+        address: 76
+        display_reference: "30077"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 1.0
+        offset: 0.0
+        unit: "count"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/adxl345_sample_sequence"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "adxl345_feature_sequence"
+        description: "ADXL345 feature-window sequence"
+        function: "0x04"
+        address: 86
+        display_reference: "30087"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 1.0
+        offset: 0.0
+        unit: "count"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/adxl345_feature_sequence"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "health_state"
+        description: "P5 aggregate health state"
+        function: "0x04"
+        address: 117
+        display_reference: "30118"
+        data_type: "uint16"
+        register_count: 1
+        scale: 1.0
+        offset: 0.0
+        unit: "enum"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/health_state"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+      - name: "rs485_error_count"
+        description: "P5 cumulative RS485 error count"
+        function: "0x04"
+        address: 120
+        display_reference: "30121"
+        data_type: "uint32"
+        register_count: 2
+        byte_order: "big_endian"
+        word_order: "high_word_first"
+        scale: 1.0
+        offset: 0.0
+        unit: "count"
+        access: "read"
+        mqtt:
+          topic: "industrial_iot_gateway/devices/stm32_condition_node/registers/rs485_error_count"
+          publish_policy: "telemetry_with_quality"
+        poll:
+          enabled: true
+          poll_period_ms: 6000
+          freshness_ms: 18000
+
+acceptance_boundary:
+  expected_device_signature: 20533
+  expected_source_value_present_mask_low_nibble: 15
+  expected_health_state: 1
+  address_write_authorized: false
+  project_five_register_map_revision: 1
+  exclusions:
+    - "holding-register writes"
+    - "slave-address migration"
+    - "automatic byte-order detection"
+    - "sensor metrology accuracy"
+    - "ADXL345 physical interrupt validation"

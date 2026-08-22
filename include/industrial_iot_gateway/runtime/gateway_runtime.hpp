@@ -40,6 +40,7 @@ struct GatewayRuntimeConfig {
   concurrency::QueueConfig measurement_queue{512U, 410U};
   std::chrono::milliseconds response_timeout{500};
   std::chrono::milliseconds late_response_guard{200};
+  std::chrono::milliseconds minimum_request_interval{0};
   std::chrono::milliseconds serial_reopen_backoff{200};
 };
 

@@ -53,6 +53,7 @@ struct RuntimeConfiguration {
   std::vector<RuntimeRegisterDefinition> registers{};
   std::vector<scheduler::PollJob> poll_jobs{};
   std::vector<quality::RegisterFreshnessConfig> freshness{};
+  std::chrono::milliseconds minimum_request_interval{0};
 
   [[nodiscard]] const RuntimeRegisterDefinition *
   find_register(std::uint32_t poll_job_id) const noexcept;

@@ -194,6 +194,7 @@ int main(const int argc, char **argv) {
   }
   industrial_iot_gateway::runtime::GatewayRuntimeConfig config{};
   config.serial.device_path = options->serial_device;
+  config.minimum_request_interval = loaded.configuration->minimum_request_interval;
   config.registers = std::move(*loaded.configuration);
   std::unique_ptr<industrial_iot_gateway::runtime::GatewayRuntime> runtime{};
 #ifdef GATEWAY_HAS_MQTT

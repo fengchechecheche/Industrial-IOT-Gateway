@@ -149,12 +149,34 @@ TEST(GatewayRuntimePtyTest, PollsThreeSlavesWritesAndStopsInOrder) {
   EXPECT_NE(evidence.str().find("runtime_started"), std::string::npos);
   EXPECT_NE(evidence.str().find("telemetry"), std::string::npos);
   EXPECT_NE(evidence.str().find("stop_requested"), std::string::npos);
-
   bus.stop();
   const auto handled = bus.handled_requests();
   EXPECT_GT(handled[0], 0U);
   EXPECT_GT(handled[1], 0U);
   EXPECT_GT(handled[2], 0U);
+}
+
+TEST(GatewayRuntimePtyTest, EnforcesConfiguredMinimumRequestStartInterval) {
+  PtyBusHarness bus(kRegisterMap, kScenarioMap);
+  ASSERT_TRUE(bus.start()) << bus.last_error();
+  std::ostringstream evidence;
+  auto config = runtime_config_for(bus.gateway_path());
+  config.minimum_request_interval = std::chrono::milliseconds(100);
+  GatewayRuntime runtime(std::move(config), evidence);
+  ASSERT_TRUE(runtime.valid());
+
+  const auto started_at = std::chrono::steady_clock::now();
+  ASSERT_TRUE(runtime.start());
+  ASSERT_TRUE(wait_until([&runtime] { return runtime.statistics().requests_sent >= 5U; },
+                         std::chrono::seconds(2)))
+      << evidence.str();
+  const auto elapsed = std::chrono::steady_clock::now() - started_at;
+  runtime.request_stop(ShutdownReason::service_stop);
+  runtime.join();
+
+  EXPECT_GE(elapsed, std::chrono::milliseconds(350));
+  EXPECT_EQ(runtime.statistics().requests_failed, 0U) << evidence.str();
+  EXPECT_TRUE(runtime.statistics().stopped);
 }
 
 struct FaultCase {

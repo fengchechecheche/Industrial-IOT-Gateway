@@ -91,8 +91,8 @@ python3 tools/demo.py --profile pty-mqtt
 PTY、broker 断线/恢复和有界停止场景。成功输出包含 `DEMO_RESULT=PASS` 和
 `HARDWARE_VALIDATED=false`。
 
-这只是 Linux x86_64 上的软件集成演示，不代表树莓派、ARM64、systemd 稳定版门、真实
-USB-RS485、STM32、CAN 或 RS485 电气层已经验证。演示只清理由本次命令创建的进程，不会按
+这只是 Linux x86_64 上的软件集成演示，不代表树莓派、ARM64、systemd 稳定版门、
+真实 USB-RS485、STM32、CAN 或 RS485 电气层已经验证。演示只清理由本次命令创建的进程，不会按
 进程名停止用户已有的 broker。
 
 ## 本地双架构 Release
