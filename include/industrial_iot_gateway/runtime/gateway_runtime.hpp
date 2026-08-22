@@ -67,12 +67,16 @@ struct GatewayRuntimeStatistics {
   std::uint64_t quality_transitions{};
   std::uint64_t explicit_write_successes{};
   std::uint64_t measurement_enqueue_failures{};
+  std::uint64_t scheduler_feedback_delivery_failures{};
+  std::uint64_t scheduler_transition_errors{};
+  std::uint64_t scheduler_deadline_recoveries{};
   std::size_t in_flight_requests{};
   std::size_t maximum_in_flight_requests{};
   bool running{};
   bool stopped{};
   concurrency::QueueStatistics request_queue{};
   concurrency::QueueStatistics measurement_queue{};
+  concurrency::QueueStatistics scheduler_feedback_queue{};
   concurrency::QueueStatistics publish_queue{};
   publish::PublishSinkStatistics publisher{};
   std::array<SlaveRuntimeStatistics, 256U> slaves{};

@@ -25,6 +25,9 @@ namespace {
 
 using RuntimeClock = std::chrono::steady_clock;
 using RuntimeTimePoint = RuntimeClock::time_point;
+constexpr auto kSchedulerFeedbackDeliveryTimeout = std::chrono::milliseconds(100);
+constexpr auto kMaximumLateResponseTransfer = std::chrono::milliseconds(150);
+constexpr auto kSchedulerFeedbackJitterGrace = std::chrono::milliseconds(50);
 
 struct AttemptSentFeedback {
   std::uint64_t request_id{};
@@ -120,6 +123,62 @@ map_parser_error(protocol::ParserErrorCategory error) noexcept {
     return "deadline_exceeded";
   case scheduler::RequestResultCategory::shutdown_cancelled:
     return "shutdown_cancelled";
+  }
+  return "unknown";
+}
+
+[[nodiscard]] std::string scheduler_error_name(scheduler::SchedulerErrorCategory error) {
+  switch (error) {
+  case scheduler::SchedulerErrorCategory::none:
+    return "none";
+  case scheduler::SchedulerErrorCategory::empty_poll_plan:
+    return "empty_poll_plan";
+  case scheduler::SchedulerErrorCategory::duplicate_poll_job_id:
+    return "duplicate_poll_job_id";
+  case scheduler::SchedulerErrorCategory::invalid_slave_address:
+    return "invalid_slave_address";
+  case scheduler::SchedulerErrorCategory::unsupported_poll_function:
+    return "unsupported_poll_function";
+  case scheduler::SchedulerErrorCategory::invalid_poll_quantity:
+    return "invalid_poll_quantity";
+  case scheduler::SchedulerErrorCategory::address_range_overflow:
+    return "address_range_overflow";
+  case scheduler::SchedulerErrorCategory::invalid_poll_period:
+    return "invalid_poll_period";
+  case scheduler::SchedulerErrorCategory::invalid_policy_configuration:
+    return "invalid_policy_configuration";
+  case scheduler::SchedulerErrorCategory::invalid_device_health_configuration:
+    return "invalid_device_health_configuration";
+  case scheduler::SchedulerErrorCategory::no_in_flight_request:
+    return "no_in_flight_request";
+  case scheduler::SchedulerErrorCategory::request_id_mismatch:
+    return "request_id_mismatch";
+  case scheduler::SchedulerErrorCategory::poll_job_id_mismatch:
+    return "poll_job_id_mismatch";
+  case scheduler::SchedulerErrorCategory::attempt_mismatch:
+    return "attempt_mismatch";
+  case scheduler::SchedulerErrorCategory::invalid_request_state:
+    return "invalid_request_state";
+  case scheduler::SchedulerErrorCategory::invalid_observation_times:
+    return "invalid_observation_times";
+  case scheduler::SchedulerErrorCategory::request_id_exhausted:
+    return "request_id_exhausted";
+  }
+  return "unknown";
+}
+
+[[nodiscard]] std::string queue_push_status_name(concurrency::QueuePushStatus status) {
+  switch (status) {
+  case concurrency::QueuePushStatus::accepted:
+    return "accepted";
+  case concurrency::QueuePushStatus::coalesced:
+    return "coalesced";
+  case concurrency::QueuePushStatus::full:
+    return "full";
+  case concurrency::QueuePushStatus::closed:
+    return "closed";
+  case concurrency::QueuePushStatus::timed_out:
+    return "timed_out";
   }
   return "unknown";
 }
@@ -277,6 +336,7 @@ public:
     }
     copy.request_queue = request_queue.statistics();
     copy.measurement_queue = measurement_queue.statistics();
+    copy.scheduler_feedback_queue = scheduler_feedback.statistics();
     copy.publisher = publish_sink->statistics();
     copy.publish_queue = copy.publisher.queue;
     return copy;
@@ -339,6 +399,27 @@ private:
         }
 
         const auto now = RuntimeClock::now();
+        const auto next_wake = poll_scheduler.next_wake_time();
+        const auto feedback_grace = config.late_response_guard + kMaximumLateResponseTransfer +
+                                    kSchedulerFeedbackJitterGrace;
+        if (poll_scheduler.has_in_flight_request() && next_wake.has_value() &&
+            now >= *next_wake + feedback_grace) {
+          auto advanced = poll_scheduler.on_time_advanced(now);
+          if (!advanced.has_value()) {
+            handle_scheduler_error(
+                "scheduler_deadline_recovery_rejected",
+                {scheduler::SchedulerErrorCategory::invalid_request_state, 0U, 0U}, 0U);
+            continue;
+          }
+          {
+            const std::lock_guard<std::mutex> lock(statistics_mutex);
+            ++statistics_value.scheduler_deadline_recoveries;
+          }
+          log_scheduler_transition("scheduler_deadline_recovery", *advanced,
+                                   observability::LogSeverity::warning);
+          process_scheduler_transition(*advanced, now);
+          continue;
+        }
         if (auto request = poll_scheduler.dispatch_next(now); request.has_value()) {
           const auto status = request_queue.push(*request);
           if (status == concurrency::QueuePushStatus::accepted ||
@@ -352,8 +433,10 @@ private:
         }
 
         auto wake_at = now + std::chrono::milliseconds(50);
-        if (const auto next = poll_scheduler.next_wake_time(); next.has_value()) {
-          wake_at = std::min(wake_at, *next);
+        if (next_wake.has_value()) {
+          const auto scheduled_wake =
+              poll_scheduler.has_in_flight_request() ? *next_wake + feedback_grace : *next_wake;
+          wake_at = std::min(wake_at, scheduled_wake);
         }
         feedback = scheduler_feedback.wait_pop_until(wake_at);
         if (feedback.status == concurrency::QueuePopStatus::item && feedback.value.has_value()) {
@@ -370,22 +453,34 @@ private:
   void process_scheduler_feedback(scheduler::PollScheduler &poll_scheduler,
                                   const SchedulerFeedback &feedback) {
     if (const auto *sent = std::get_if<AttemptSentFeedback>(&feedback)) {
-      static_cast<void>(
-          poll_scheduler.mark_attempt_sent(sent->request_id, sent->attempt, sent->sent_at));
+      const auto error =
+          poll_scheduler.mark_attempt_sent(sent->request_id, sent->attempt, sent->sent_at);
+      if (error.category != scheduler::SchedulerErrorCategory::none) {
+        handle_scheduler_error("scheduler_mark_attempt_rejected", error, sent->attempt);
+      }
       return;
     }
     const auto &result = std::get<scheduler::AttemptResult>(feedback);
     const auto transition = poll_scheduler.record_attempt_result(result);
-    const auto *definition = config.registers.find_register(result.poll_job_id);
+    process_scheduler_transition(transition, result.observed_at);
+  }
+
+  void process_scheduler_transition(const scheduler::SchedulerTransition &transition,
+                                    RuntimeTimePoint observed_at) {
+    if (transition.error.category != scheduler::SchedulerErrorCategory::none) {
+      handle_scheduler_error("scheduler_result_rejected", transition.error, transition.attempt);
+      return;
+    }
+    const auto *definition = config.registers.find_register(transition.poll_job_id);
     if (definition != nullptr && (transition.terminal || transition.device_state_changed)) {
       static_cast<void>(quality_control.try_push(
-          {result.poll_job_id, definition->slave_id, result.category, result.observed_at,
+          {transition.poll_job_id, definition->slave_id, transition.result, observed_at,
            transition.terminal, transition.device_state_changed, transition.device_state}));
     }
     if (transition.terminal) {
       const std::lock_guard<std::mutex> lock(statistics_mutex);
       auto &slave = statistics_value.slaves[definition == nullptr ? 0U : definition->slave_id];
-      if (result.category == scheduler::RequestResultCategory::success) {
+      if (transition.result == scheduler::RequestResultCategory::success) {
         ++statistics_value.requests_succeeded;
         ++slave.requests_succeeded;
       } else {
@@ -393,6 +488,48 @@ private:
         ++slave.requests_failed;
       }
     }
+  }
+
+  void log_scheduler_transition(const std::string &event,
+                                const scheduler::SchedulerTransition &transition,
+                                observability::LogSeverity severity) {
+    observability::StructuredEvent value{};
+    value.event = event;
+    value.component = "scheduler";
+    value.severity = severity;
+    value.request_id = transition.request_id;
+    value.attempt = transition.attempt;
+    value.monotonic_ms =
+        static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                       RuntimeClock::now().time_since_epoch())
+                                       .count());
+    value.result = result_name(transition.result);
+    value.reason =
+        transition.terminal ? "terminal_deadline_transition" : "retry_deadline_transition";
+    static_cast<void>(log_writer->write(value));
+  }
+
+  void handle_scheduler_error(const std::string &event,
+                              const scheduler::SchedulerError &error_value, std::uint32_t attempt) {
+    observability::StructuredEvent value{};
+    value.event = event;
+    value.component = "scheduler";
+    value.severity = observability::LogSeverity::critical;
+    value.request_id = error_value.request_id;
+    value.attempt = attempt;
+    value.monotonic_ms =
+        static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                       RuntimeClock::now().time_since_epoch())
+                                       .count());
+    value.result = "scheduler_transition_error";
+    value.reason = scheduler_error_name(error_value.category);
+    value.queue_depth = scheduler_feedback.statistics().current_depth;
+    static_cast<void>(log_writer->write(value));
+    {
+      const std::lock_guard<std::mutex> lock(statistics_mutex);
+      ++statistics_value.scheduler_transition_errors;
+    }
+    request_stop(lifecycle::ShutdownReason::fatal_component_error);
   }
 
   [[nodiscard]] bool ensure_serial_open(transport::SerialPort &serial) {
@@ -455,10 +592,9 @@ private:
                            const scheduler::ScheduledRequest &request,
                            scheduler::RequestResultCategory original_result) {
     constexpr auto frame_boundary = std::chrono::microseconds(2'006);
-    constexpr auto maximum_frame_transfer = std::chrono::milliseconds(150);
     const auto started_at = RuntimeClock::now();
     const auto listen_deadline = started_at + config.late_response_guard;
-    const auto overall_deadline = listen_deadline + maximum_frame_transfer + frame_boundary;
+    const auto overall_deadline = listen_deadline + kMaximumLateResponseTransfer + frame_boundary;
     auto last_byte_at = started_at;
     bool received_any{};
     LateResponseQuarantineOutcome outcome{};
@@ -656,6 +792,42 @@ private:
     return outcome;
   }
 
+  [[nodiscard]] bool submit_scheduler_feedback(SchedulerFeedback feedback,
+                                               const scheduler::ScheduledRequest &request) {
+    const auto status = scheduler_feedback.push_until(
+        feedback, RuntimeClock::now() + kSchedulerFeedbackDeliveryTimeout);
+    if (status == concurrency::QueuePushStatus::accepted) {
+      return true;
+    }
+    if (status == concurrency::QueuePushStatus::closed && stop_requested.load()) {
+      return false;
+    }
+
+    observability::StructuredEvent event{};
+    event.event = "scheduler_feedback_delivery_failed";
+    event.component = "serial";
+    event.severity = observability::LogSeverity::critical;
+    event.request_id = request.request_id;
+    event.attempt = request.attempt;
+    event.slave_id = request_slave_id(request.request);
+    event.function = request_function(request.request);
+    event.address = request_address(request.request);
+    event.monotonic_ms =
+        static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                       RuntimeClock::now().time_since_epoch())
+                                       .count());
+    event.result = "scheduler_feedback_error";
+    event.reason = queue_push_status_name(status);
+    event.queue_depth = scheduler_feedback.statistics().current_depth;
+    static_cast<void>(log_writer->write(event));
+    {
+      const std::lock_guard<std::mutex> lock(statistics_mutex);
+      ++statistics_value.scheduler_feedback_delivery_failures;
+    }
+    request_stop(lifecycle::ShutdownReason::fatal_component_error);
+    return false;
+  }
+
   void serial_loop() noexcept {
     transport::SerialPort serial;
     try {
@@ -697,8 +869,12 @@ private:
         const auto attempt_started = RuntimeClock::now();
         previous_request_started_at = attempt_started;
         if (request.request_kind == scheduler::RequestKind::poll_read) {
-          static_cast<void>(scheduler_feedback.try_push(AttemptSentFeedback{
-              request.request_id, request.poll_job_id, request.attempt, attempt_started}));
+          if (!submit_scheduler_feedback(AttemptSentFeedback{request.request_id,
+                                                             request.poll_job_id, request.attempt,
+                                                             attempt_started},
+                                         request)) {
+            continue;
+          }
         }
         const auto outcome = execute_request(serial, request);
         const auto observed_at = RuntimeClock::now();
@@ -761,7 +937,7 @@ private:
           result.category = outcome.category;
           result.observed_at = observed_at;
           result.remote_exception_code = outcome.exception_code;
-          static_cast<void>(scheduler_feedback.try_push(result));
+          static_cast<void>(submit_scheduler_feedback(result, request));
         } else {
           const std::lock_guard<std::mutex> lock(statistics_mutex);
           auto &slave = statistics_value.slaves[request_slave_id(request.request)];

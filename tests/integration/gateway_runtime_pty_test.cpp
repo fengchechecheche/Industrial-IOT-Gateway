@@ -289,6 +289,49 @@ TEST(GatewayRuntimePtyTest, ReopensStableDevicePathAfterPtyDisconnect) {
   EXPECT_GT(runtime.statistics().serial_errors, 0U);
 }
 
+TEST(GatewayRuntimePtyTest, RapidSerialIoTransientNeverStallsSchedulerFeedback) {
+  PtyBusHarness bus(kRegisterMap, kScenarioMap);
+  ASSERT_TRUE(bus.start()) << bus.last_error();
+  std::ostringstream evidence;
+  auto config = runtime_config_for(bus.gateway_path());
+  config.minimum_request_interval = std::chrono::milliseconds(5);
+  config.serial_reopen_backoff = std::chrono::milliseconds(5);
+  GatewayRuntime runtime(std::move(config), evidence);
+  ASSERT_TRUE(runtime.start());
+  ASSERT_TRUE(wait_until([&runtime] { return runtime.statistics().requests_succeeded >= 20U; },
+                         std::chrono::seconds(3)))
+      << evidence.str();
+
+  for (std::size_t cycle = 0U; cycle < 24U; ++cycle) {
+    const auto before = runtime.statistics();
+    ASSERT_TRUE(bus.disconnect_and_reconnect(std::chrono::milliseconds(0)))
+        << "cycle=" << cycle << ": " << bus.last_error();
+    ASSERT_TRUE(wait_until(
+        [&runtime, &before] {
+          const auto after = runtime.statistics();
+          return after.serial_open_successes > before.serial_open_successes &&
+                 after.slaves[1].requests_succeeded > before.slaves[1].requests_succeeded &&
+                 after.slaves[2].requests_succeeded > before.slaves[2].requests_succeeded &&
+                 after.slaves[3].requests_succeeded > before.slaves[3].requests_succeeded;
+        },
+        std::chrono::seconds(3)))
+        << "scheduler stopped making progress after rapid serial I/O failure at cycle=" << cycle
+        << '\n'
+        << evidence.str();
+  }
+
+  runtime.request_stop(ShutdownReason::service_stop);
+  runtime.join();
+  const auto after = runtime.statistics();
+  EXPECT_TRUE(after.stopped);
+  EXPECT_EQ(after.in_flight_requests, 0U);
+  EXPECT_GE(after.serial_open_successes, 25U);
+  EXPECT_GT(after.serial_errors, 0U);
+  EXPECT_EQ(after.scheduler_feedback_delivery_failures, 0U);
+  EXPECT_EQ(after.scheduler_transition_errors, 0U);
+  EXPECT_EQ(after.scheduler_feedback_queue.full, 0U);
+}
+
 TEST(GatewayRuntimePtyTest, QuarantinesLateResponseWithoutPollutingNextTransaction) {
   PtyBusHarness bus(kRegisterMap, kScenarioMap);
   ASSERT_TRUE(bus.start()) << bus.last_error();

@@ -243,6 +243,12 @@ int main(const int argc, char **argv) {
             << statistics.requests_succeeded
             << ",\"requests_failed\":" << statistics.requests_failed
             << ",\"serial_open_successes\":" << statistics.serial_open_successes
+            << ",\"scheduler_feedback_delivery_failures\":"
+            << statistics.scheduler_feedback_delivery_failures
+            << ",\"scheduler_transition_errors\":" << statistics.scheduler_transition_errors
+            << ",\"scheduler_deadline_recoveries\":" << statistics.scheduler_deadline_recoveries
+            << ",\"scheduler_feedback_queue_high_water\":"
+            << statistics.scheduler_feedback_queue.maximum_depth
             << ",\"mqtt_connected_events\":" << statistics.publisher.connected_events
             << ",\"mqtt_publish_successes\":" << statistics.publisher.publish_successes
             << ",\"mqtt_publish_failures\":" << statistics.publisher.publish_failures
