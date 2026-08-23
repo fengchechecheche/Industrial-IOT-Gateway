@@ -51,9 +51,17 @@
 |---:|---|---|---|
 | 1 | P3-S7-G6-T02 | `p3_s7_g6_t02_三从站rs485总线与mqtt映射.md` | TAS-A、TAS-B 与 STM32 三从站正常基线及两个对称支路故障场景 PASS；CP-D 已关闭 |
 | 2 | P3-S7-G6-T03 | `p3_s7_g6_t03_真实从站故障隔离与systemd恢复.md` | 17 个真实故障与 systemd 场景全部 PASS；CP-E 已关闭 |
+| 3 | P3-S7-G6-T04 | `p3_s7_g6_t04_三从站硬件长稳与资源趋势.md` | 一小时预跑与八小时真实三从站硬件长稳均 PASS；CP-F、CP-G 已关闭 |
+| 4 | P3-S7-G6-T05 | `p3_s7_g6_t05_验收证据与声明边界.md` | evidence matrix、claim ledger 与 CSV 已固化；G6 已关闭 |
 
 G6-T02 证明当前桌面短线拓扑在单个 TAS 支路断开期间仍能持续轮询其余从站，并在支路恢复后
 自动回到 MQTT `online/fresh`。
 
 G6-T03 已完成 TAS 补充周期、STM32 RESET、Mosquitto、USB-RS485、SIGTERM 和 systemd/reboot
-故障恢复，正式 17 个场景全部 PASS。该结果仍不替代 G6-T04 的一小时预跑和八小时真实硬件长稳。
+故障恢复，正式 17 个场景全部 PASS。
+
+G6-T04 已在候选提交 `c5ddc365ae46c920a78d71ef67ee13fe9de39651` 上完成 3600 秒预跑和
+28800 秒正式硬件长稳。三个从站正常窗口逻辑成功率均为 1.000，资源、温度、MQTT、关闭和
+证据完整性门全部通过。G6-T05 已完成 evidence matrix、claim ledger 和 CSV 固化，G6 以
+“v0.1.0 发布后的真实硬件补充验证”边界正式关闭；不可变 v0.1.0 仍保持
+`published=false`、`tag=null`、`hardware_validated=false`。

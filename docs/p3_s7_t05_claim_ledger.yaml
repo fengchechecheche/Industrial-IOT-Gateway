@@ -1,16 +1,21 @@
-schema_version: "1.1"
+schema_version: "1.2"
 project:
   name: "Industrial-IOT-Gateway"
   local_identifier: "industrial_iot_gateway"
   document_status: "USER_APPROVED_AND_FINALIZED"
-  generated_on: "2026-08-15"
-  reviewed_on: "2026-08-18"
+  generated_on: "2026-08-23"
+  reviewed_on: "2026-08-23"
 
 frozen_input:
-  repository_revision: "2a0c961bb9677fb3cc54b1e57be88a96cd9db82b"
-  worktree_state: "产品候选清洁；T06 文档变更经用户审核后独立固化"
+  repository_revision: "c5ddc365ae46c920a78d71ef67ee13fe9de39651"
+  release_product_revision: "2a0c961bb9677fb3cc54b1e57be88a96cd9db82b"
+  g6_t02_revision: "b35a01e25c95fb427fbfa165c4e7f3b030f73b8d"
+  g6_t03_revision: "e873b5e31a7dde5990860cf641ee59241e5ef910"
+  g6_t04_revision: "c5ddc365ae46c920a78d71ef67ee13fe9de39651"
+  worktree_state: "T04/T05 已批准正式文档待用户提交"
   release_scope: "Linux x86_64 + Linux ARM64 本地软件 Release"
   release_state: "本地双架构 Release 就绪，未创建 Git tag、未上传 GitHub Release"
+  hardware_supplement_state: "T00-T05 PASS；G6 PASS"
 
 evidence_inputs:
   - path: "docs/p3_s7_t01_release_gate_decision.md"
@@ -39,6 +44,16 @@ evidence_inputs:
     sha256: "5d6495d94035e4ae802599bf9621b94191cb30214c00725130d330358362bdd9"
   - path: "docs/p3_s7_t06_validation.md"
     sha256: "f5601034de16d0384b93ea3e11b4e4b7247562906bd4bb36d43bf270f6fa1ccc"
+  - path: "docs/p3_s7_g6_t00_evidence_reuse.md"
+    sha256: "1b65833b71ab88cc5fd58db5fa13d9b388a71d3134616d8aa0a9ab543d8e2c64"
+  - path: "docs/p3_s7_g6_t01_validation.md"
+    sha256: "bdb9f75655d2586f128d4113e0015a3f6d12f5ed0be0425d5e83f4f6f33245e6"
+  - path: "docs/p3_s7_g6_t02_validation.md"
+    sha256: "d512435e2bebe5d73aa6052c23e88437f86eee28d322da249daca313b08154fb"
+  - path: "docs/p3_s7_g6_t03_validation.md"
+    sha256: "c21bc06e366e16d098ad655099749a713aa928f8f8f03e539d2c6a668ed2780e"
+  - path: "docs/p3_s7_g6_t04_validation.md"
+    sha256: "9ec31354e1029e03370be83f6dc05a39bc3f8b4fff306a60dd0e4f4bff0a163f"
 
 facts:
   - fact_id: "P3-F001"
@@ -177,13 +192,15 @@ facts:
 
   - fact_id: "P3-F014"
     statement: "真实 USB-RS485、商用 Modbus 从站、STM32 与 CAN 台架验收尚未执行。"
-    status: "NOT_RUN_OPTIONAL"
+    status: "HISTORICAL_LIMITATION_PARTIALLY_RESOLVED"
     evidence_refs:
       - "docs/p3_s7_t01_release_gate_decision.md"
       - "docs/P3-S7-ARM64-T02_validation.md"
       - "docs/p3_s7_t06_validation.md"
-    metrics: ["hardware_validated=false", "G6=NOT_RUN_OPTIONAL"]
-    limitations: ["不得声称真实硬件、物理层或工业现场验证"]
+    metrics: ["then: hardware_validated=false", "then: G6=NOT_RUN_OPTIONAL"]
+    effective_until: "2026-08-23"
+    resolved_by: ["P3-F021", "P3-F022", "P3-F023", "P3-F024"]
+    limitations: ["RS485、商用从站和 STM32 已由后续 G6 补充验证", "CAN 仍不是项目三 G6 能力", "仅作为阶段历史"]
 
   - fact_id: "P3-F015"
     statement: "ARM64 8 小时长稳在 P3-S7-ARM64-T02 结束时尚未执行。"
@@ -242,6 +259,45 @@ facts:
     metrics: ["release_status=LOCAL_RELEASE_READY", "published=false", "hardware_validated=false"]
     limitations: ["未创建 Git tag，未上传 GitHub Release，未执行真实硬件 G6"]
 
+  - fact_id: "P3-F021"
+    statement: "两只 TAS-WS-R00020 已分别完成单机读取、CRC、10 分钟连续读取、低压断电恢复和地址/串口配置持久化。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s7_g6_t00_evidence_reuse.md"
+      - "docs/p3_s7_g6_t01_validation.md"
+    metrics: ["TAS-A 1200/1200", "TAS-B 1200/1200", "TAS-A=1/19200 8E1", "TAS-B=2/19200 8E1"]
+    limitations: ["桌面短线与当前 CH340 条件", "不声明计量精度", "无万用表终端阻值实测"]
+
+  - fact_id: "P3-F022"
+    statement: "Raspberry Pi 4B 上的真实 USB-RS485、TAS-A、TAS-B 与 STM32 地址 4 已完成三从站 JSONL/MQTT 集成和两个 TAS 对称支路故障复验。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s7_g6_t02_validation.md"
+      - "run:g6_t02_b35a01e_normal_baseline"
+      - "run:g6_t02_b35a01e_fault_tas_a_final"
+      - "run:g6_t02_b35a01e_fault_tas_b_final"
+    metrics: ["正常基线 60/60、60/60、340/340", "MQTT 463/0", "非目标最大成功间隔 < 10 秒"]
+    limitations: ["当前桌面短线拓扑", "CAN 不在本次验收", "不声明传感器计量精度"]
+
+  - fact_id: "P3-F023"
+    statement: "真实三从站台架完成 TAS 支路、STM32 RESET、Mosquitto、USB-RS485、SIGTERM 和 systemd/reboot 共 17 个故障恢复场景。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s7_g6_t03_validation.md"
+      - "run:20260822T214326Z_g6_t03_e873b5e_001"
+    metrics: ["17/17 场景 PASS", "failures=[]", "579 项 SHA-256 有效", "reboot 后观察 602.520 秒"]
+    limitations: ["不含电气破坏、过压或短路", "CAN 不在本次验收", "单一桌面台架"]
+
+  - fact_id: "P3-F024"
+    statement: "真实三从站台架完成 3600 秒预跑和 28800 秒正式硬件长稳，三从站正常窗口逻辑请求成功率均为 1.000。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/p3_s7_g6_t04_validation.md"
+      - "run:20260823T032544Z_g6_t04_preflight_c5ddc36_001"
+      - "run:20260823T043408Z_g6_t04_release_c5ddc36_001"
+    metrics: ["28802.252 秒", "TAS-A/TAS-B/STM32 success_rate=1.000", "最大成功间隔 4.886/4.895/2.997 秒", "shutdown=194 ms", "failures=[]"]
+    limitations: ["单次正式 8 小时运行", "当前桌面短线拓扑", "不构成计量、EMC、工业现场或无限期可靠性认证"]
+
 claims:
   - claim_id: "P3-C001"
     statement: "使用 C++17 实现 Modbus RTU 软件网关核心，覆盖 0x03/0x04/0x06、CRC16、流式解析、多从站轮询和数据质量状态。"
@@ -252,7 +308,7 @@ claims:
     contribution_scope: "个人实现网关协议、调度和质量语义；使用 Linux termios 平台 API。"
     allowed_channels: ["resume", "interview", "public_project", "private_notes"]
     required_qualifiers: ["软件实现", "Modbus RTU 子集"]
-    prohibited_wording: ["完整 Modbus 协议栈", "真实 RS485 已验证", "工业级"]
+    prohibited_wording: ["完整 Modbus 协议栈", "仅凭软件实现声明真实 RS485 已验证", "工业级"]
     public_safe: true
     review_status: "USER_APPROVED"
 
@@ -278,7 +334,7 @@ claims:
     contribution_scope: "个人实现故障 runner、判定逻辑和结构化证据；Mosquitto 是测试 broker。"
     allowed_channels: ["resume", "interview", "public_project", "private_notes"]
     required_qualifiers: ["PTY 软件仿真", "本地 Mosquitto"]
-    prohibited_wording: ["真实 RS485 故障矩阵", "硬件故障注入通过"]
+    prohibited_wording: ["用 G3 软件矩阵声明真实 RS485 故障矩阵", "用 PTY 证据声明硬件故障注入通过"]
     public_safe: true
     review_status: "USER_APPROVED"
 
@@ -363,23 +419,23 @@ claims:
   - claim_id: "P3-C010"
     statement: "项目已经通过真实 USB-RS485、商用 Modbus 传感器、STM32 和 CAN 台架验证。"
     status: "REJECTED_CLAIM"
-    source_fact_ids: ["P3-F014"]
-    evidence_refs: ["docs/p3_s7_t01_release_gate_decision.md", "docs/P3-S7-ARM64-T02_validation.md"]
-    metrics: ["hardware_validated=false"]
-    contribution_scope: "未执行。"
+    source_fact_ids: ["P3-F014", "P3-F021", "P3-F022", "P3-F023", "P3-F024"]
+    evidence_refs: ["docs/p3_s7_g6_t01_validation.md", "docs/p3_s7_g6_t02_validation.md", "docs/p3_s7_g6_t03_validation.md", "docs/p3_s7_g6_t04_validation.md"]
+    metrics: ["RS485/商用从站/STM32 已补充验证", "CAN 不在项目三 G6 范围"]
+    contribution_scope: "该合并表述仍不成立；只能分别声明已验证的 RS485 路径，不能附加 CAN。"
     allowed_channels: []
     required_qualifiers: []
-    prohibited_wording: ["真实硬件已验证", "RS485/CAN 台架 PASS"]
+    prohibited_wording: ["RS485/CAN 全链路 PASS", "项目三 CAN 已验证"]
     public_safe: false
     review_status: "REJECTED_BY_EVIDENCE"
 
   - claim_id: "P3-C011"
     statement: "项目已经达到工业级、生产可用或现场高可靠。"
     status: "REJECTED_CLAIM"
-    source_fact_ids: ["P3-F008", "P3-F014"]
-    evidence_refs: ["docs/p3_s7_t04_validation.md", "docs/p3_s7_t01_release_gate_decision.md"]
+    source_fact_ids: ["P3-F008", "P3-F024"]
+    evidence_refs: ["docs/p3_s7_t04_validation.md", "docs/p3_s7_g6_t04_validation.md"]
     metrics: []
-    contribution_scope: "现有软件证据不足以支持。"
+    contribution_scope: "现有软件与桌面短线真实硬件证据仍不足以支持工业级或现场高可靠。"
     allowed_channels: []
     required_qualifiers: []
     prohibited_wording: ["工业级", "生产可用", "现场验证", "高可靠"]
@@ -448,5 +504,44 @@ claims:
     allowed_channels: ["resume", "interview", "public_project", "private_notes"]
     required_qualifiers: ["本地软件 Release", "未公开发布", "不含真实 RS485/CAN"]
     prohibited_wording: ["GitHub Release 已发布", "正式硬件版", "工业级"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C017"
+    statement: "在 Raspberry Pi 4B 的桌面短线台架上完成两只 TAS-WS-R00020 与 STM32 的三从站 Modbus RTU 采集及本地 MQTT 上行集成。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F021", "P3-F022"]
+    evidence_refs: ["docs/p3_s7_g6_t01_validation.md", "docs/p3_s7_g6_t02_validation.md"]
+    metrics: ["地址 1/2/4", "点位覆盖 2/2/17", "正常基线逻辑成功率 1.000/1.000/1.000"]
+    contribution_scope: "个人实现并部署网关配置、调度、质量状态和 MQTT 映射；商用 TAS、STM32、CH340、Paho 与 Mosquitto 为外部硬件/软件能力。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["Raspberry Pi 4B", "桌面短线 RS485", "本地 Mosquitto", "不含 CAN"]
+    prohibited_wording: ["工业现场部署", "长距离 RS485", "计量级传感器", "CAN 已验证"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C018"
+    statement: "为真实三从站台架建立故障隔离与 systemd 恢复验收，TAS 支路、STM32 RESET、broker、USB-RS485、SIGTERM 和 reboot 共 17/17 场景通过。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F022", "P3-F023"]
+    evidence_refs: ["docs/p3_s7_g6_t02_validation.md", "docs/p3_s7_g6_t03_validation.md", "run:20260822T214326Z_g6_t03_e873b5e_001"]
+    metrics: ["17/17 场景 PASS", "failures=[]", "579 项 SHA-256 有效", "NRestarts=0"]
+    contribution_scope: "个人实现并执行故障 runner、oracle 和证据链；systemd/journald、Mosquitto 和硬件设备为平台或外部能力。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["当前真实三从站桌面台架", "受控故障", "不含破坏性电气测试", "不含 CAN"]
+    prohibited_wording: ["工业故障认证", "过压/短路验证", "CAN 故障矩阵"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C019"
+    statement: "在 Raspberry Pi 4B 真实三从站台架完成 3600 秒预跑和 28800 秒正式硬件长稳，三个从站正常窗口逻辑请求成功率均为 1.000。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F024"]
+    evidence_refs: ["docs/p3_s7_g6_t04_validation.md", "run:20260823T043408Z_g6_t04_release_c5ddc36_001"]
+    metrics: ["28802.252 秒", "成功率 1.000/1.000/1.000", "最大成功间隔 4.886/4.895/2.997 秒", "MQTT publish failure=0", "shutdown=194 ms"]
+    contribution_scope: "个人实现并执行真实硬件长稳 runner、资源趋势、请求/MQTT 判定和证据固化。"
+    allowed_channels: ["resume", "interview", "public_project", "private_notes"]
+    required_qualifiers: ["Raspberry Pi 4B", "单次 8 小时正式运行", "当前桌面短线三从站拓扑", "不含 CAN"]
+    prohibited_wording: ["工业级", "生产可用", "无限期可靠", "计量认证", "长距离/EMC 已验证"]
     public_safe: true
     review_status: "USER_APPROVED"
