@@ -58,17 +58,41 @@
 
 ## 5. 备份状态与风险
 
-当前已核验树莓派主副本仍存在，正式目录大小和 SHA256SUMS 文件哈希已经记录。大体积原始证据
-没有复制进 Git，也没有在本次轻量封装中创建第二份完整镜像。因此当前状态为：
+当前已核验树莓派主副本仍存在，正式目录大小和 SHA256SUMS 文件哈希已经记录。2026-08-23 已将
+T04 完整工作根复制到 Windows 私有备份目录，范围包含两轮 smoke、一小时预跑、八小时正式运行、
+构建树、源码快照、传输记录、退出码和恢复记录。该副本不进入 Git。
+
+备份复核结果：
+
+- 源与目标均为 617 个文件、179 个目录；
+- 文件总字节均为 1002233050；
+- 相对路径差异为 0；
+- 617/617 个文件逐项 SHA-256 一致；
+- 四个 run 自带的 `SHA256SUMS` 共复核 128 项，均无缺失或哈希不一致；
+- 盘点目录 20 个数据/脚本/可视化文件已由 `INVENTORY_SHA256SUMS.txt` 固化，该清单 SHA-256 为
+  `89de026b6e891651d922a662193219a147cd185e0058ac7fde92b3247876df2b`；
+- 树莓派源目录未删除。
+
+Windows 逻辑定位符：
+
+`planning-output:.private/raw_evidence_backup/g6_t04_c5ddc365_20260823`
+
+盘点、哈希和可视化位于：
+
+`planning-output:.private/raw_evidence_backup/g6_t04_c5ddc365_20260823_inventory`
+
+当前状态为：
 
 ```text
 PRIMARY_EVIDENCE_COPY=VERIFIED
-SECOND_FULL_RAW_BACKUP=NOT_CREATED_BY_THIS_TASK
+SECOND_FULL_RAW_BACKUP=VERIFIED_ON_WINDOWS
+BACKUP_FILE_COUNT=617
+BACKUP_SHA256_MISMATCH_COUNT=0
 DELETE_AUTHORIZATION=NONE
 ```
 
-这不阻塞项目工程状态冻结，但意味着树莓派存储仍是原始大体积证据的主要副本。后续如果迁移或
-清理设备，应先复制到独立存储，逐项校验 SHA-256，再授权删除源目录。
+树莓派主副本和 Windows 完整副本当前同时保留。任何后续迁移或清理仍应先复核本清单和逐文件
+SHA-256，并取得单独删除授权；本次备份不构成删除授权。
 
 ## 6. 可清理对象
 
