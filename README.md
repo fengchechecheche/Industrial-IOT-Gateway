@@ -2,6 +2,18 @@
 
 `industrial_iot_gateway` 是一个采用 C++17 开发的工业通信网关项目。
 
+```text
+PROJECT_FROZEN
+MAINTENANCE_ONLY
+LOCAL_DUAL_ARCH_RELEASE_READY
+POST_RELEASE_G6_HARDWARE_SUPPLEMENT=PASS
+PUBLISHED=false
+TAG=null
+```
+
+冻结边界、维护规则和证据保留策略见 [`docs/project_freeze.md`](docs/project_freeze.md) 与
+[`docs/evidence_retention_manifest.md`](docs/evidence_retention_manifest.md)。
+
 ## 当前范围
 
 仓库当前已实现：
@@ -18,16 +30,20 @@
 - 两个平台均通过原生 Release 构建、完整 CTest、确定性双归档、清洁解包、
   PTY/Mosquitto 演示、SIGTERM 和卸载复演；
 - Raspberry Pi 4B ARM64 已通过 8 小时软件长稳与受控 systemd 重启自启演练；
+- Raspberry Pi 4B、USB-RS485、两只 TAS-WS-R00020 和 STM32 地址 4 已完成真实三从站
+  Modbus RTU/MQTT 集成、17/17 个受控故障恢复场景、3600 秒预跑和 28800 秒正式硬件长稳；
 - Ubuntu-24.04-Gateway x86_64 已通过新 CH340 USB-RS485，以只读地址 4 profile
   连续读取真实项目五 STM32 节点，并完成 JSONL、一次 NUCLEO RESET 恢复和约 60 秒
   本地 Mosquitto 投影。详见 [`docs/p3_p5_modbus_interop.md`](docs/p3_p5_modbus_interop.md)。
 
-当前已验证 Linux x86_64 与 Raspberry Pi 4B ARM64 的软件构建、测试、systemd、长稳和
-本地 bundle；另在 Ubuntu-24.04-Gateway x86_64、新 CH340、短线共地和地址 4 边界内完成
-一次真实 STM32 Modbus/RS485 上行联调。但仍未创建 Git tag、未上传 GitHub Release，也未
-验证 Raspberry Pi 真实 RS485、商用 Modbus 从站、项目三 CAN、电气安全或硬件长稳。
-PTY/Mosquitto 软件证据和本次窄范围台架结果都不能外推为完整 G6 或工业现场验收。当前也不
-包含 MQTT 下行写寄存器、TLS 或生产凭据。部署与排障命令见 `docs/runbook.md`。
+当前已验证 Linux x86_64 与 Raspberry Pi 4B ARM64 的软件构建、测试、systemd、长稳和本地
+bundle；G6 又在 Raspberry Pi 4B 的桌面短线台架上完成两只商用 TAS 与 STM32 的真实三从站
+RS485/MQTT、故障恢复和八小时正式长稳。该结果属于 v0.1.0 发布后的硬件补充验证，详见
+[`docs/releases/v0.1.0_hardware_validation_supplement/README.md`](docs/releases/v0.1.0_hardware_validation_supplement/README.md)。
+
+项目仍未创建 Git tag、未上传 GitHub Release，也未验证项目三 CAN、计量精度、长距离、EMC、
+浪涌或工业现场条件。当前也不包含 MQTT 下行写寄存器、TLS 或生产凭据。部署与排障命令见
+`docs/runbook.md`。
 
 ## 构建与测试
 
@@ -110,10 +126,8 @@ HARDWARE_VALIDATED=false
 TAG=null
 ```
 
-这表示本地双架构软件 Release 已就绪，但没有创建 Git tag 或 GitHub Release，也没有完成
-完整 G6 硬件验收。当前仅新增一次 Ubuntu-24.04-Gateway x86_64、新 CH340、地址 4 的真实
-STM32 只读联调；`HARDWARE_VALIDATED=false` 继续覆盖 Raspberry Pi、商用从站、CAN、
-电气安全和硬件长稳等未完成范围。
+这表示本地双架构软件 Release 已就绪，但没有创建 Git tag 或 GitHub Release。后来完成的 G6
+真实硬件结果保存在独立补充证据包中，不回写原 Release 的 `hardware_validated=false`。
 
 Sanitizer 构建：
 

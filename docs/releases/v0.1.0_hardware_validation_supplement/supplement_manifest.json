@@ -1,0 +1,69 @@
+{
+  "schema_version": "p3-v0.1.0-hardware-supplement-v1",
+  "supplement_status": "COMPLETE",
+  "supplement_type": "POST_RELEASE_REAL_HARDWARE_VALIDATION",
+  "generated_on": "2026-08-23",
+  "project": "Industrial-IOT-Gateway",
+  "immutable_release": {
+    "version": "0.1.0",
+    "source_revision": "2a0c961bb9677fb3cc54b1e57be88a96cd9db82b",
+    "release_tool_revision": "db309472b76d0f64d30d8d001db4cf40ace8380a",
+    "release_status": "LOCAL_RELEASE_READY",
+    "published": false,
+    "tag": null,
+    "hardware_validated": false,
+    "assets": [
+      {
+        "name": "industrial_iot_gateway-0.1.0-linux-x86_64.tar.gz",
+        "sha256": "2b820fbed97ccd4192288cbc1a1eb8cbde45e6b90cf2686895934b681932e309"
+      },
+      {
+        "name": "industrial_iot_gateway-0.1.0-linux-arm64.tar.gz",
+        "sha256": "14d70f0aaa62bbc5aacf75a687e5493b6f91454c9af707abe8403e716aee7ab6"
+      }
+    ]
+  },
+  "g6": {
+    "evidence_finalization_revision": "18e0af7c57e916af641e1e868995cb1a4855a631",
+    "t02_revision": "b35a01e25c95fb427fbfa165c4e7f3b030f73b8d",
+    "t03_revision": "e873b5e31a7dde5990860cf641ee59241e5ef910",
+    "t04_revision": "c5ddc365ae46c920a78d71ef67ee13fe9de39651",
+    "status": "PASS",
+    "fault_scenarios": "17/17 PASS",
+    "preflight_duration_seconds": 3602.241,
+    "formal_soak_duration_seconds": 28802.252,
+    "normal_window_success_rates": {
+      "tas_a_address_1": 1.0,
+      "tas_b_address_2": 1.0,
+      "stm32_address_4": 1.0
+    },
+    "max_success_gap_seconds": {
+      "tas_a_address_1": 4.886,
+      "tas_b_address_2": 4.895,
+      "stm32_address_4": 2.997
+    },
+    "mqtt_publish_failures_normal_window": 0,
+    "shutdown_milliseconds": 194,
+    "unclosed_failures": 0
+  },
+  "validated_scope": [
+    "Raspberry Pi 4B Ubuntu Server 24.04 ARM64",
+    "desktop short-line RS485",
+    "USB-RS485",
+    "two TAS-WS-R00020 devices at addresses 1 and 2",
+    "STM32 node at address 4",
+    "Modbus RTU 19200 8E1",
+    "local Mosquitto MQTT uplink",
+    "systemd recovery",
+    "one 8-hour formal hardware soak"
+  ],
+  "not_validated": [
+    "CAN as a Project Three G6 capability",
+    "measurement accuracy certification",
+    "long-distance RS485",
+    "EMC, surge or destructive electrical testing",
+    "industrial-grade or production-ready operation",
+    "indefinite reliability"
+  ],
+  "freeze_revision_rule": "the first Git commit containing docs/project_freeze.md and this supplement"
+}

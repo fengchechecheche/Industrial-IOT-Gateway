@@ -2,9 +2,12 @@ schema_version: "1.2"
 project:
   name: "Industrial-IOT-Gateway"
   local_identifier: "industrial_iot_gateway"
-  document_status: "USER_APPROVED_AND_FINALIZED"
+  document_status: "PROJECT_FROZEN_MAINTENANCE_ONLY"
   generated_on: "2026-08-23"
   reviewed_on: "2026-08-23"
+  lifecycle_status: "PROJECT_FROZEN"
+  freeze_parent_revision: "18e0af7c57e916af641e1e868995cb1a4855a631"
+  freeze_effective_revision: "the first Git commit containing docs/project_freeze.md"
 
 frozen_input:
   repository_revision: "c5ddc365ae46c920a78d71ef67ee13fe9de39651"
@@ -12,10 +15,11 @@ frozen_input:
   g6_t02_revision: "b35a01e25c95fb427fbfa165c4e7f3b030f73b8d"
   g6_t03_revision: "e873b5e31a7dde5990860cf641ee59241e5ef910"
   g6_t04_revision: "c5ddc365ae46c920a78d71ef67ee13fe9de39651"
-  worktree_state: "T04/T05 已批准正式文档待用户提交"
+  g6_evidence_finalization_revision: "18e0af7c57e916af641e1e868995cb1a4855a631"
+  worktree_state: "冻结父提交工作区干净；有效冻结基线为首次包含 docs/project_freeze.md 的提交"
   release_scope: "Linux x86_64 + Linux ARM64 本地软件 Release"
   release_state: "本地双架构 Release 就绪，未创建 Git tag、未上传 GitHub Release"
-  hardware_supplement_state: "T00-T05 PASS；G6 PASS"
+  hardware_supplement_state: "T00-T05 PASS；G6 PASS；轻量补充证据包 COMPLETE"
 
 evidence_inputs:
   - path: "docs/p3_s7_t01_release_gate_decision.md"
@@ -54,6 +58,12 @@ evidence_inputs:
     sha256: "c21bc06e366e16d098ad655099749a713aa928f8f8f03e539d2c6a668ed2780e"
   - path: "docs/p3_s7_g6_t04_validation.md"
     sha256: "9ec31354e1029e03370be83f6dc05a39bc3f8b4fff306a60dd0e4f4bff0a163f"
+  - path: "docs/releases/v0.1.0_hardware_validation_supplement/supplement_manifest.json"
+    sha256: "efd945706a4589af23475f2efb4c79ee722cb50dfd2ff9bd175b0170e8d0155d"
+  - path: "docs/project_freeze.md"
+    sha256: "3c60c484892685929213f733fc64dd79b85d1908ee880bc6e9e99a85b7f06299"
+  - path: "docs/evidence_retention_manifest.md"
+    sha256: "854e9b100d4c93cafcf5262500d021bda04683d306d56bea05c5ad402a214b7b"
 
 facts:
   - fact_id: "P3-F001"
@@ -297,6 +307,24 @@ facts:
       - "run:20260823T043408Z_g6_t04_release_c5ddc36_001"
     metrics: ["28802.252 秒", "TAS-A/TAS-B/STM32 success_rate=1.000", "最大成功间隔 4.886/4.895/2.997 秒", "shutdown=194 ms", "failures=[]"]
     limitations: ["单次正式 8 小时运行", "当前桌面短线拓扑", "不构成计量、EMC、工业现场或无限期可靠性认证"]
+
+  - fact_id: "P3-F025"
+    statement: "项目已形成轻量 v0.1.0 发布后硬件验证补充证据包，以独立 manifest、evidence index、报告副本和 SHA256SUMS 关联 G6 结果，未改写原五文件 Release。"
+    status: "VERIFIED_RESULT"
+    evidence_refs:
+      - "docs/releases/v0.1.0_hardware_validation_supplement/"
+      - "docs/p3_s7_g6_evidence_matrix.md"
+    metrics: ["SUPPLEMENT_STATUS=COMPLETE", "POST_RELEASE_G6_HARDWARE_SUPPLEMENT=PASS", "原 x86_64/ARM64 包 SHA-256 不变"]
+    limitations: ["不是新软件版本", "未创建 tag 或 GitHub Release", "原 release_index.hardware_validated=false 保持不变"]
+
+  - fact_id: "P3-F026"
+    statement: "项目已建立冻结记录、证据保留清单和解冻规则；首次包含冻结文件的用户提交使项目进入 PROJECT_FROZEN / MAINTENANCE_ONLY。"
+    status: "VERIFIED_PROCESS"
+    evidence_refs:
+      - "docs/project_freeze.md"
+      - "docs/evidence_retention_manifest.md"
+    metrics: ["freeze_parent_revision=18e0af7c57e916af641e1e868995cb1a4855a631", "PROJECT_FROZEN", "MAINTENANCE_ONLY"]
+    limitations: ["冻结在用户提交后生效", "后续行为、配置、硬件范围或 Release 变化必须先解冻"]
 
 claims:
   - claim_id: "P3-C001"
@@ -543,5 +571,18 @@ claims:
     allowed_channels: ["resume", "interview", "public_project", "private_notes"]
     required_qualifiers: ["Raspberry Pi 4B", "单次 8 小时正式运行", "当前桌面短线三从站拓扑", "不含 CAN"]
     prohibited_wording: ["工业级", "生产可用", "无限期可靠", "计量认证", "长距离/EMC 已验证"]
+    public_safe: true
+    review_status: "USER_APPROVED"
+
+  - claim_id: "P3-C020"
+    statement: "项目已在完成本地双架构软件 Release 和发布后真实三从站 G6 验收后冻结，转入维护状态。"
+    status: "VERIFIED_RESULT"
+    source_fact_ids: ["P3-F020", "P3-F025", "P3-F026"]
+    evidence_refs: ["docs/p3_s7_t06_validation.md", "docs/releases/v0.1.0_hardware_validation_supplement/", "docs/project_freeze.md"]
+    metrics: ["PROJECT_FROZEN", "MAINTENANCE_ONLY", "POST_RELEASE_G6_HARDWARE_SUPPLEMENT=PASS"]
+    contribution_scope: "个人完成软件实现、跨架构本地 Release、真实硬件验收、证据治理和生命周期冻结；第三方依赖及外部硬件能力保持原边界。"
+    allowed_channels: ["interview", "public_project", "private_notes"]
+    required_qualifiers: ["本地双架构软件 Release", "发布后桌面短线真实硬件补充验证", "未公开发布", "不含 CAN"]
+    prohibited_wording: ["GitHub Release 已发布", "工业级产品", "CAN 已验证", "原 v0.1.0 hardware_validated=true"]
     public_safe: true
     review_status: "USER_APPROVED"

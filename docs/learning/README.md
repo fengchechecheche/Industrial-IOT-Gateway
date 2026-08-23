@@ -65,3 +65,10 @@ G6-T04 已在候选提交 `c5ddc365ae46c920a78d71ef67ee13fe9de39651` 上完成 3
 证据完整性门全部通过。G6-T05 已完成 evidence matrix、claim ledger 和 CSV 固化，G6 以
 “v0.1.0 发布后的真实硬件补充验证”边界正式关闭；不可变 v0.1.0 仍保持
 `published=false`、`tag=null`、`hardware_validated=false`。
+
+## 项目冻结与维护
+
+项目已经形成轻量 v0.1.0 硬件验证补充证据包，并进入 `PROJECT_FROZEN / MAINTENANCE_ONLY`
+生命周期。冻结记录见 `../project_freeze.md`，原始证据保留边界见
+`../evidence_retention_manifest.md`。后续学习可继续使用现有教程，但新增产品行为、正式配置、
+硬件范围或 Release 资产前必须先明确解冻理由和针对性回归范围。

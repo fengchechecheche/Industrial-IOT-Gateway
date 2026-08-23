@@ -1,0 +1,80 @@
+{
+  "schema_version": "p3-g6-evidence-index-v1",
+  "generated_on": "2026-08-23",
+  "raw_evidence_committed_to_git": false,
+  "storage_class": "PRIVATE_RASPBERRY_PI_EVIDENCE_ROOT",
+  "entries": [
+    {
+      "work_block": "P3-S7-G6-T02",
+      "revision": "b35a01e25c95fb427fbfa165c4e7f3b030f73b8d",
+      "logical_locator": "raspberry-pi:g6/t02/b35a01e/evidence/normal_baseline",
+      "bytes": 472558,
+      "sha256sums_sha256": "605aaa96295cf15f1dc45602a334c7bbd2682cb777d6353aee59c3a4e41c7dc9",
+      "status": "PASS"
+    },
+    {
+      "work_block": "P3-S7-G6-T02",
+      "revision": "b35a01e25c95fb427fbfa165c4e7f3b030f73b8d",
+      "logical_locator": "raspberry-pi:g6/t02/b35a01e/evidence/fault_tas_a_final",
+      "bytes": 1921276,
+      "sha256sums_sha256": "adda7a52236f09edc184b0869b87154f3fd7b3b382a53544c81d0eaa8e787211",
+      "status": "PASS"
+    },
+    {
+      "work_block": "P3-S7-G6-T02",
+      "revision": "b35a01e25c95fb427fbfa165c4e7f3b030f73b8d",
+      "logical_locator": "raspberry-pi:g6/t02/b35a01e/evidence/fault_tas_b_final",
+      "bytes": 1894230,
+      "sha256sums_sha256": "16881edf85c3c96f12c1f53429a2a9d6c4b7acd72ca7c0bcd73c2c6da5f72142",
+      "status": "PASS"
+    },
+    {
+      "work_block": "P3-S7-G6-T03",
+      "revision": "e873b5e31a7dde5990860cf641ee59241e5ef910",
+      "run_id": "20260822T214326Z_g6_t03_e873b5e_001",
+      "logical_locator": "raspberry-pi:g6/t03/e873b5e/artifacts/hardware/g6-t03/20260822T214326Z_g6_t03_e873b5e_001",
+      "bytes": 139500939,
+      "sha256sums_sha256": "07f7fefa117b53d45982b2cd6d172ed322b3ff5acc1cd85c5908b551ddf74f02",
+      "status": "PASS",
+      "evidence_files": 579
+    },
+    {
+      "work_block": "P3-S7-G6-T04-PREFLIGHT",
+      "revision": "c5ddc365ae46c920a78d71ef67ee13fe9de39651",
+      "run_id": "20260823T032544Z_g6_t04_preflight_c5ddc36_001",
+      "logical_locator": "raspberry-pi:g6/t04/c5ddc36/20260823T032544Z_g6_t04_preflight_c5ddc36_001",
+      "bytes": 107495038,
+      "sha256sums_sha256": "a899a024cdfcb756b916339aed8dd837f0a880cd65b90b679b935cb8509528f8",
+      "status": "PASS",
+      "duration_seconds": 3602.241
+    },
+    {
+      "work_block": "P3-S7-G6-T04-RELEASE",
+      "revision": "c5ddc365ae46c920a78d71ef67ee13fe9de39651",
+      "run_id": "20260823T043408Z_g6_t04_release_c5ddc36_001",
+      "logical_locator": "raspberry-pi:g6/t04/c5ddc36/20260823T043408Z_g6_t04_release_c5ddc36_001",
+      "bytes": 860494667,
+      "sha256sums_sha256": "d02be15e7ed275fc55c4b0f3c180c33b915d4cc821a17704ebe2c7e6effaeb86",
+      "status": "PASS",
+      "duration_seconds": 28802.252
+    }
+  ],
+  "public_reports": [
+    {
+      "path": "reports/g6_evidence_matrix.md",
+      "sha256": "3327daf407d7f8b8a344a5a50a246865985f96da4e91a7aa93a384bbda11b560"
+    },
+    {
+      "path": "reports/g6_t03_validation.md",
+      "sha256": "003c9951f9050640bd84f6c6616f0aaf311643a04954306dcbd2ea24161a2713"
+    },
+    {
+      "path": "reports/g6_t04_validation.md",
+      "sha256": "3f3d339f16d9b10afbe0e3ce8fc4cb1c75cd13b6e22fe64de402275cb6827079"
+    },
+    {
+      "path": "reports/g6_t05_validation.md",
+      "sha256": "187e9893315bf54b41869d9d4e2cf605da6c2be23b6f3bcc6104c3a76ff6825d"
+    }
+  ]
+}
