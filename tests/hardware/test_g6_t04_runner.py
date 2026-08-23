@@ -10,6 +10,7 @@ from unittest import mock
 from tools.hardware.g6_t04_runner import (
     EvidenceStore,
     SegmentIndex,
+    journal_collector_argv,
     parse_journal_line,
     parse_mqtt_line,
     safe_output_root,
@@ -17,6 +18,12 @@ from tools.hardware.g6_t04_runner import (
 
 
 class G6T04RunnerTests(unittest.TestCase):
+    def test_journal_collector_reads_all_lines_from_exact_invocation(self) -> None:
+        argv = journal_collector_argv("inv-a")
+        self.assertIn("_SYSTEMD_INVOCATION_ID=inv-a", argv)
+        self.assertIn("--lines=all", argv)
+        self.assertIn("--follow", argv)
+
     def test_output_root_must_remain_under_hardware_artifacts(self) -> None:
         root = pathlib.Path("/repo").resolve()
         self.assertEqual(

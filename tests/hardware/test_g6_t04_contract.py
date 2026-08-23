@@ -96,7 +96,8 @@ def passing_observation(kind: str = "preflight") -> dict:
         )
     return {
         "source_revision": "a" * 40,
-        "run_id": "run-1",
+        "run_id": "evidence-run-1",
+        "gateway_run_id": "run-1",
         "started_monotonic_ms": start,
         "ended_monotonic_ms": end,
         "gateway_events": events,
@@ -124,8 +125,12 @@ def passing_observation(kind: str = "preflight") -> dict:
 
 
 class G6T04ContractTests(unittest.TestCase):
-    def test_profiles_freeze_preflight_and_release_contracts(self) -> None:
-        for kind, duration, warmup in (("preflight", 3600, 300), ("release", 28800, 600)):
+    def test_profiles_freeze_smoke_preflight_and_release_contracts(self) -> None:
+        for kind, duration, warmup in (
+            ("smoke", 120, 10),
+            ("preflight", 3600, 300),
+            ("release", 28800, 600),
+        ):
             selected = profile(kind)
             validate_profile(selected)
             self.assertEqual(selected["profile_id"], EXPECTED_PROFILE_IDS[kind])
@@ -163,6 +168,8 @@ class G6T04ContractTests(unittest.TestCase):
         result = evaluate_run(profile(), passing_observation())
         self.assertEqual(result["status"], "PASS")
         self.assertFalse(result["hardware_long_soak_pass"])
+        self.assertEqual(result["run_id"], "evidence-run-1")
+        self.assertEqual(result["gateway_run_id"], "run-1")
         self.assertEqual(result["unclosed_failures"], 0)
         self.assertEqual(set(result["slaves"]), {"1", "2", "4"})
         self.assertEqual(result["task_coverage"]["covered"], 21)
@@ -171,6 +178,20 @@ class G6T04ContractTests(unittest.TestCase):
         result = evaluate_run(profile("release"), passing_observation("release"))
         self.assertEqual(result["status"], "PASS")
         self.assertTrue(result["hardware_long_soak_pass"])
+
+    def test_smoke_skips_long_term_trend_claims(self) -> None:
+        observation = passing_observation("smoke")
+        observation["resource_samples"][-1]["rss_mib"] += 10.0
+        result = evaluate_run(profile("smoke"), observation)
+        trend = next(
+            row
+            for row in result["oracles"]
+            if row["oracle_id"] == "resources.rss_slope_mib_per_hour"
+        )
+        self.assertFalse(trend["enforced"])
+        self.assertFalse(trend["passed"])
+        self.assertEqual(result["status"], "PASS")
+        self.assertFalse(result["hardware_long_soak_pass"])
 
     def test_failed_request_rate_and_gap_are_not_hidden(self) -> None:
         observation = passing_observation()
@@ -227,6 +248,20 @@ class G6T04ContractTests(unittest.TestCase):
         failed = {item["oracle_id"] for item in result["oracles"] if not item["passed"]}
         self.assertIn("mqtt.run_id_mismatch", failed)
         self.assertIn("evidence.maximum_bytes", failed)
+
+    def test_evidence_run_id_does_not_need_to_match_gateway_run_id(self) -> None:
+        observation = passing_observation()
+        self.assertNotEqual(observation["run_id"], observation["gateway_run_id"])
+        result = evaluate_run(profile(), observation)
+        self.assertEqual(result["status"], "PASS")
+
+    def test_missing_or_ambiguous_gateway_run_id_fails(self) -> None:
+        observation = passing_observation()
+        observation["gateway_run_id"] = None
+        observation["mqtt_messages"][0]["payload"]["run_id"] = "mixed-run"
+        result = evaluate_run(profile(), observation)
+        failed = {item["oracle_id"] for item in result["oracles"] if not item["passed"]}
+        self.assertIn("mqtt.gateway_run_id_unique", failed)
 
     def test_collection_gap_and_over_capacity_fail(self) -> None:
         observation = passing_observation()

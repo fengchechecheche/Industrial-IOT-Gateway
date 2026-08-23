@@ -13,11 +13,12 @@ from typing import Any
 
 PROFILE_SCHEMA = "p3-s7-g6-t04-profile-v1"
 EXPECTED_PROFILE_IDS = {
+    "smoke": "g6_t04_hardware_smoke_v1",
     "preflight": "g6_t04_hardware_preflight_v1",
     "release": "g6_t04_hardware_release_v1",
 }
-EXPECTED_DURATIONS = {"preflight": 3600, "release": 28800}
-EXPECTED_WARMUPS = {"preflight": 300, "release": 600}
+EXPECTED_DURATIONS = {"smoke": 120, "preflight": 3600, "release": 28800}
+EXPECTED_WARMUPS = {"smoke": 10, "preflight": 300, "release": 600}
 FIXED_UNIT = "industrial_iot_gateway.service"
 FIXED_MOSQUITTO_UNIT = "mosquitto.service"
 FIXED_SERIAL_PATH = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"
@@ -89,7 +90,7 @@ def validate_profile(profile: Mapping[str, Any]) -> None:
         raise ContractError("profile task_id must be P3-S7-G6-T04")
     kind = profile.get("profile_kind")
     if kind not in EXPECTED_PROFILE_IDS:
-        raise ContractError("profile_kind must be preflight or release")
+        raise ContractError("profile_kind must be smoke, preflight or release")
     if profile.get("profile_id") != EXPECTED_PROFILE_IDS[str(kind)]:
         raise ContractError("profile_id does not match profile_kind")
     if profile.get("duration_seconds") != EXPECTED_DURATIONS[str(kind)]:
@@ -123,6 +124,7 @@ def load_profile(path: pathlib.Path, repository_root: pathlib.Path) -> dict[str,
     resolved = path.resolve()
     allowed = (repository_root / "config/hardware").resolve()
     if resolved.parent != allowed or resolved.name not in {
+        "g6_t04_smoke_profile.json",
         "g6_t04_preflight_profile.json",
         "g6_t04_release_profile.json",
     }:
@@ -175,10 +177,17 @@ def _maximum_gap(values: Sequence[int], start_ms: int, end_ms: int) -> int:
     return max(right - left for left, right in zip(boundaries, boundaries[1:]))
 
 
-def _oracle(oracle_id: str, passed: bool, expected: object, actual: object) -> dict[str, Any]:
+def _oracle(
+    oracle_id: str,
+    passed: bool,
+    expected: object,
+    actual: object,
+    *,
+    enforced: bool = True,
+) -> dict[str, Any]:
     return {
         "oracle_id": oracle_id,
-        "enforced": True,
+        "enforced": enforced,
         "expected": expected,
         "actual": actual,
         "passed": bool(passed),
@@ -284,6 +293,7 @@ def evaluate_run(profile: Mapping[str, Any], observation: Mapping[str, Any]) -> 
     window_start = started_ms + warmup_seconds * 1000
     window_end = ended_ms
     actual_duration = max(0.0, (ended_ms - started_ms) / 1000.0)
+    formal_performance_gate = profile["profile_kind"] != "smoke"
 
     events = [row for row in data.get("gateway_events", []) if isinstance(row, Mapping)]
     normal_attempts = [
@@ -323,12 +333,14 @@ def evaluate_run(profile: Mapping[str, Any], observation: Mapping[str, Any]) -> 
                     rate >= float(thresholds["normal_success_rate_min"]),
                     f">={thresholds['normal_success_rate_min']}",
                     rate,
+                    enforced=formal_performance_gate,
                 ),
                 _oracle(
                     f"requests.slave_{slave_id}.maximum_success_gap_ms",
                     gap <= int(thresholds["maximum_success_gap_ms"]),
                     f"<={thresholds['maximum_success_gap_ms']}",
                     gap,
+                    enforced=formal_performance_gate,
                 ),
             ]
         )
@@ -359,6 +371,7 @@ def evaluate_run(profile: Mapping[str, Any], observation: Mapping[str, Any]) -> 
                 throughput >= float(thresholds["minimum_request_throughput_per_second"]),
                 f">={thresholds['minimum_request_throughput_per_second']}",
                 throughput,
+                enforced=formal_performance_gate,
             ),
             _oracle("requests.task_coverage", not task_coverage["missing"], 21, task_coverage["covered"]),
         ]
@@ -415,11 +428,27 @@ def evaluate_run(profile: Mapping[str, Any], observation: Mapping[str, Any]) -> 
         if isinstance(row.get("received_monotonic_ms"), int)
         and window_start <= int(row["received_monotonic_ms"]) <= window_end
     ]
+    live_gateway_run_ids = {
+        str(payload["run_id"])
+        for row in mqtt_normal_all
+        for payload in [row.get("payload")]
+        if row.get("retain") is False
+        and isinstance(payload, Mapping)
+        and payload.get("message_type", "telemetry") == "telemetry"
+        and isinstance(payload.get("run_id"), str)
+        and payload["run_id"]
+    }
+    gateway_run_id = data.get("gateway_run_id")
+    gateway_run_id_unique = (
+        isinstance(gateway_run_id, str)
+        and bool(gateway_run_id)
+        and live_gateway_run_ids == {gateway_run_id}
+    )
     mqtt_run_id_mismatches = [
         row
         for row in mqtt_normal_all
         if not isinstance(row.get("payload"), Mapping)
-        or row["payload"].get("run_id") != data.get("run_id")
+        or row["payload"].get("run_id") != gateway_run_id
     ]
     mqtt_normal = [row for row in mqtt_normal_all if row not in mqtt_run_id_mismatches]
     sequences = [
@@ -440,6 +469,12 @@ def evaluate_run(profile: Mapping[str, Any], observation: Mapping[str, Any]) -> 
             _oracle("mqtt.fresh_present", fresh_count > 0, ">0", fresh_count),
             _oracle("mqtt.duplicate_sequences", duplicate_sequences == 0, 0, duplicate_sequences),
             _oracle("mqtt.sequence_regressions", sequence_regressions == 0, 0, sequence_regressions),
+            _oracle(
+                "mqtt.gateway_run_id_unique",
+                gateway_run_id_unique,
+                "one live gateway run_id matching the observed process",
+                sorted(live_gateway_run_ids),
+            ),
             _oracle("mqtt.run_id_mismatch", not mqtt_run_id_mismatches, 0, len(mqtt_run_id_mismatches)),
         ]
     )
@@ -492,7 +527,25 @@ def evaluate_run(profile: Mapping[str, Any], observation: Mapping[str, Any]) -> 
         ("evidence.maximum_bytes", bool(evidence) and max(evidence) <= thresholds["evidence_max_bytes"], thresholds["evidence_max_bytes"], max(evidence) if evidence else None),
         ("host.minimum_disk_free", bool(disk) and min(disk) >= thresholds["minimum_disk_free_bytes"], thresholds["minimum_disk_free_bytes"], min(disk) if disk else None),
     )
-    oracles.extend(_oracle(name, passed, expected_value, actual) for name, passed, expected_value, actual in resource_checks)
+    smoke_non_enforced = {
+        "resources.rss_slope_mib_per_hour",
+        "resources.rss_stable_delta_mib",
+        "resources.cpu_average",
+        "resources.cpu_p95",
+        "resources.cpu_above_90_seconds",
+        "resources.fd_drift",
+        "resources.thread_drift",
+    }
+    oracles.extend(
+        _oracle(
+            name,
+            passed,
+            expected_value,
+            actual,
+            enforced=profile["profile_kind"] != "smoke" or name not in smoke_non_enforced,
+        )
+        for name, passed, expected_value, actual in resource_checks
+    )
     for field in ("throttled_current_bits", "throttled_history_new_bits", "gateway_nrestarts", "mosquitto_nrestarts"):
         values = [row.get(field) for row in resources]
         oracles.append(_oracle(f"resources.{field}", bool(values) and all(value == 0 for value in values), "all 0", values))
@@ -514,7 +567,7 @@ def evaluate_run(profile: Mapping[str, Any], observation: Mapping[str, Any]) -> 
             _oracle("evidence.collection_gaps", not collection_gaps, [], collection_gaps),
         ]
     )
-    failures = [oracle for oracle in oracles if not oracle["passed"]]
+    failures = [oracle for oracle in oracles if oracle["enforced"] and not oracle["passed"]]
     status = "PASS" if not failures else "FAIL"
     return {
         "schema_version": "p3-s7-g6-t04-summary-v1",
@@ -523,6 +576,7 @@ def evaluate_run(profile: Mapping[str, Any], observation: Mapping[str, Any]) -> 
         "profile_kind": profile["profile_kind"],
         "source_revision": data.get("source_revision"),
         "run_id": data.get("run_id"),
+        "gateway_run_id": gateway_run_id,
         "status": status,
         "hardware_long_soak_pass": status == "PASS" and profile["profile_kind"] == "release",
         "duration_seconds": actual_duration,
@@ -536,6 +590,7 @@ def evaluate_run(profile: Mapping[str, Any], observation: Mapping[str, Any]) -> 
             "duplicate_sequences": duplicate_sequences,
             "sequence_regressions": sequence_regressions,
             "run_id_mismatches": len(mqtt_run_id_mismatches),
+            "gateway_run_id": gateway_run_id,
         },
         "logical_attempt_retries": logical_retries,
         "oracles": oracles,

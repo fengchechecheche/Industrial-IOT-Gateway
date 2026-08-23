@@ -98,6 +98,33 @@ def parse_mqtt_line(line: str, *, received_monotonic_ms: int) -> dict[str, Any]:
     }
 
 
+def journal_collector_argv(invocation_id: str) -> list[str]:
+    if not invocation_id:
+        raise ValueError("systemd invocation id must not be empty")
+    return [
+        "journalctl",
+        f"_SYSTEMD_INVOCATION_ID={invocation_id}",
+        "--follow",
+        "--lines=all",
+        "--output=json",
+        "--no-pager",
+    ]
+
+
+def _gateway_run_id(mqtt: list[dict[str, Any]]) -> str | None:
+    values = {
+        str(payload["run_id"])
+        for row in mqtt
+        for payload in [row.get("payload")]
+        if row.get("retain") is False
+        and isinstance(payload, dict)
+        and payload.get("message_type", "telemetry") == "telemetry"
+        and isinstance(payload.get("run_id"), str)
+        and payload["run_id"]
+    }
+    return next(iter(values)) if len(values) == 1 else None
+
+
 def _json_lines(paths: list[pathlib.Path]) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for path in paths:
@@ -192,6 +219,7 @@ class EvidenceStore:
                 "schema_version": RUN_SCHEMA,
                 "task_id": "P3-S7-G6-T04",
                 "run_id": run_id,
+                "evidence_run_id": run_id,
                 "source_revision": source_revision,
                 "profile_id": profile["profile_id"],
                 "profile_kind": profile.get("profile_kind"),
@@ -449,6 +477,7 @@ def _read_observation(store: EvidenceStore, source_revision: str, run_id: str, s
     return {
         "source_revision": source_revision,
         "run_id": run_id,
+        "gateway_run_id": _gateway_run_id(mqtt),
         "started_monotonic_ms": started_ms,
         "ended_monotonic_ms": ended_ms,
         "gateway_events": gateway,
@@ -499,14 +528,7 @@ def run(profile: dict[str, Any], source_revision: str, artifact_root: pathlib.Pa
         host = Arm64HostSampler(maximum_temperature_c=float(profile["thresholds"]["temperature_max_c"]))
         proc = ProcSampler(identity["main_pid"], store.run_dir)
         write_json_atomic(store.run_dir / "environment.json", {"schema_version": RUN_SCHEMA, **host.environment(), "gateway_identity": identity, "machine": platform.machine(), "platform": platform.platform(), "python": platform.python_version()})
-        journal_argv = [
-            "journalctl",
-            f"_SYSTEMD_INVOCATION_ID={identity['invocation_id']}",
-            "-f",
-            "-o",
-            "json",
-            "--no-pager",
-        ]
+        journal_argv = journal_collector_argv(identity["invocation_id"])
         mqtt_argv = ["mosquitto_sub", "-q", "1", "-t", profile["mqtt_topic_filter"], "-F", "%r\t%q\t%t\t%p"]
         store.append_jsonl("commands.jsonl", {"role": "journal_collector", "argv": journal_argv})
         store.append_jsonl("commands.jsonl", {"role": "mqtt_collector", "argv": mqtt_argv})
@@ -607,10 +629,14 @@ def run(profile: dict[str, Any], source_revision: str, artifact_root: pathlib.Pa
         write_json_atomic(store.run_dir / "mqtt_summary.json", summary["mqtt"])
         write_json_atomic(store.run_dir / "resource_summary.json", {"oracles": [row for row in summary["oracles"] if row["oracle_id"].startswith(("resources.", "arm64.", "host.", "evidence."))]})
         write_json_atomic(store.run_dir / "summary.json", summary)
-        failed = [row for row in summary["oracles"] if not row["passed"]]
+        failed = [
+            row
+            for row in summary["oracles"]
+            if row["enforced"] and not row["passed"]
+        ]
         write_json_atomic(store.run_dir / "failures.json", failed)
         manifest = json.loads((store.run_dir / "manifest.json").read_text(encoding="utf-8"))
-        manifest.update({"ended_at_utc": utc_now(), "monotonic_duration_seconds": (ended_ms - started_ms) / 1000.0, "status": summary["status"], "hardware_long_soak_pass": summary["hardware_long_soak_pass"]})
+        manifest.update({"ended_at_utc": utc_now(), "monotonic_duration_seconds": (ended_ms - started_ms) / 1000.0, "status": summary["status"], "hardware_long_soak_pass": summary["hardware_long_soak_pass"], "gateway_run_id": summary["gateway_run_id"]})
         write_json_atomic(store.run_dir / "manifest.json", manifest)
         (store.run_dir / "RUNNING").unlink(missing_ok=True)
         store.write_checksums()
