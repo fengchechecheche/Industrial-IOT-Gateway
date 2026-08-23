@@ -118,6 +118,26 @@ set_tests_properties(
 )
 
 add_test(
+  NAME hardware_g6_t04_contract_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/hardware/test_g6_t04_contract.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  hardware_g6_t04_contract_unit
+  PROPERTIES LABELS "unit;hardware;g6;soak;arm64" TIMEOUT 60
+)
+
+add_test(
+  NAME hardware_g6_t04_runner_unit
+  COMMAND "${Python3_EXECUTABLE}" -m unittest tests/hardware/test_g6_t04_runner.py
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  hardware_g6_t04_runner_unit
+  PROPERTIES LABELS "unit;hardware;g6;soak;arm64" TIMEOUT 30
+)
+
+add_test(
   NAME soak_profile_contract
   COMMAND "${Python3_EXECUTABLE}" -m unittest tests/soak/test_soak_profile.py
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

@@ -1,0 +1,60 @@
+{
+  "schema_version": "p3-s7-g6-t04-profile-v1",
+  "task_id": "P3-S7-G6-T04",
+  "profile_id": "g6_t04_hardware_release_v1",
+  "profile_kind": "release",
+  "duration_seconds": 28800,
+  "warmup_seconds": 600,
+  "sample_interval_seconds": 5,
+  "heartbeat_interval_seconds": 5,
+  "heartbeat_timeout_seconds": 30,
+  "systemd_unit": "industrial_iot_gateway.service",
+  "mosquitto_unit": "mosquitto.service",
+  "serial_path": "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0",
+  "register_map": "config/hardware/tas_dual_stm32_address4.yaml",
+  "mqtt_topic_filter": "industrial_iot_gateway/#",
+  "devices": {
+    "1": {"device_name": "tas_env_01", "expected_task_count": 2},
+    "2": {"device_name": "tas_env_02", "expected_task_count": 2},
+    "4": {"device_name": "stm32_condition_node", "expected_task_count": 17}
+  },
+  "task_addresses": {
+    "1": [0, 1],
+    "2": [0, 1],
+    "4": [0, 8, 12, 18, 20, 22, 24, 26, 28, 30, 50, 56, 66, 76, 86, 117, 120]
+  },
+  "thresholds": {
+    "normal_success_rate_min": 0.999,
+    "maximum_success_gap_ms": 10000,
+    "minimum_request_throughput_per_second": 3.0,
+    "shutdown_timeout_ms": 5000,
+    "scheduler_feedback_queue_capacity": 256,
+    "mqtt_queue_capacity": 1024,
+    "rss_peak_max_mib": 256.0,
+    "rss_slope_max_mib_per_hour": 2.0,
+    "rss_stable_delta_max_mib": 16.0,
+    "cpu_average_max_percent": 50.0,
+    "cpu_p95_max_percent": 80.0,
+    "cpu_above_90_max_seconds": 300,
+    "fd_max": 64,
+    "fd_drift_max": 4,
+    "thread_max": 32,
+    "thread_drift_max": 2,
+    "temperature_max_c": 80.0,
+    "minimum_disk_free_bytes": 16106127360,
+    "evidence_warning_bytes": 8589934592,
+    "evidence_risk_bytes": 9663676416,
+    "evidence_max_bytes": 10737418240,
+    "segment_max_bytes": 67108864
+  },
+  "evidence": {
+    "raw_output_prefix": "artifacts/hardware/g6/t04/",
+    "retain_all_gateway_events": true,
+    "retain_all_mqtt_messages": true,
+    "resource_sample_interval_seconds": 5,
+    "allow_dynamic_downsampling": false,
+    "overwrite_segments": false,
+    "write_indices": true,
+    "write_derived_csv_json": true
+  }
+}
