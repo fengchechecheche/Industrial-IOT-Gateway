@@ -50,7 +50,10 @@
 | 顺序 | 工作块 | 教程 | 状态 |
 |---:|---|---|---|
 | 1 | P3-S7-G6-T02 | `p3_s7_g6_t02_三从站rs485总线与mqtt映射.md` | TAS-A、TAS-B 与 STM32 三从站正常基线及两个对称支路故障场景 PASS；CP-D 已关闭 |
+| 2 | P3-S7-G6-T03 | `p3_s7_g6_t03_真实从站故障隔离与systemd恢复.md` | 17 个真实故障与 systemd 场景全部 PASS；CP-E 已关闭 |
 
 G6-T02 证明当前桌面短线拓扑在单个 TAS 支路断开期间仍能持续轮询其余从站，并在支路恢复后
-自动回到 MQTT `online/fresh`。该结论不替代 G6-T03 的 USB-RS485、Mosquitto、STM32 RESET、
-systemd/reboot 故障恢复，也不替代 G6-T04 的一小时预跑和八小时真实硬件长稳。
+自动回到 MQTT `online/fresh`。
+
+G6-T03 已完成 TAS 补充周期、STM32 RESET、Mosquitto、USB-RS485、SIGTERM 和 systemd/reboot
+故障恢复，正式 17 个场景全部 PASS。该结果仍不替代 G6-T04 的一小时预跑和八小时真实硬件长稳。
